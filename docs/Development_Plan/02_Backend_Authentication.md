@@ -128,6 +128,15 @@ This controller is completely rewritten to handle a secure cookie-based session.
       res.cookie('refreshToken', '', { httpOnly: true, expires: new Date(0) });
       res.status(200).json({ message: 'Logged out successfully' });
     };
+
+    exports.getStatus = async (req, res, next) => {
+      // The 'protect' middleware runs before this, so req.user is available.
+      try {
+        res.status(200).json(req.user);
+      } catch (error) {
+        next(error);
+      }
+    };
     ```
 
 ---
@@ -142,12 +151,14 @@ Update the routes to include the new `refreshToken` and `logout` endpoints.
     // backend/routes/auth.routes.js
     const express = require('express');
     const router = express.Router();
-    const { register, login, refreshToken, logout } = require('../controllers/auth.controller');
+    const { register, login, refreshToken, logout, getStatus } = require('../controllers/auth.controller');
+    const { protect } = require('../middleware/auth.middleware');
 
     router.post('/register', register);
     router.post('/login', login);
     router.post('/refresh-token', refreshToken);
     router.post('/logout', logout);
+    router.get('/status', protect, getStatus);
 
     module.exports = router;
     ```
