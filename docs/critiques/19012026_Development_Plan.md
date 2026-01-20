@@ -39,15 +39,6 @@ A learning project's main goal is to teach skills correctly and completely. Here
 
 ---
 
-## 2. Next Steps and Topics for Further Study
-
-A great learning project also provides a roadmap for what to learn next. The following are advanced, production-level topics. They are **not required** for this project, but the plan could briefly mention them in a final "Conclusion" section as a way to guide the learner's future growth.
-
-*   **Advanced Security:** Mention Rate Limiting (`express-rate-limit`) and Server-Side Refresh Token Invalidation as topics for securing a high-traffic production application.
-*   **Deployment:** Briefly mention that for a real deployment, the hardcoded `CORS_ORIGIN` would need to be managed by an environment variable.
-
----
-
 ## Final Housekeeping
 
 *   **Delete `00_Overall_Plan.md`:** This is the last remaining piece of the original flawed plan. To prevent any confusion, it should be removed from the project.
