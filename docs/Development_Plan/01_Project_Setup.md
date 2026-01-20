@@ -27,7 +27,7 @@ mkdir frontend
 2.  **Install Production Dependencies:**
     *   `cookie-parser` is added to securely handle `httpOnly` cookies for authentication.
     ```bash
-    npm install express mongoose cors dotenv bcryptjs jsonwebtoken cookie-parser
+    npm install express mongoose cors dotenv bcryptjs jsonwebtoken cookie-parser express-validator
     ```
 
 3.  **Install Development Dependencies:**
