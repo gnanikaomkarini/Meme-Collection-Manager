@@ -1,23 +1,26 @@
-# Development Plan: 05 - Frontend CRUD and Token Management
+# Development Plan: 05 - Frontend CRUD, Polish, and Finalization
 
-This final guide covers building the UI for meme management and implementing a smart `HttpInterceptor` to handle session expiration and token refreshing automatically.
-
-**Note:** All commands and paths are relative to the `frontend/meme-app` directory.
+This final guide elevates the frontend from a prototype to a polished application. It implements a fully functional token refresh mechanism, adds loading indicators, and builds the "Edit" feature to complete the CRUD lifecycle.
 
 ---
 
-### **Step 1: Create an HTTP Interceptor for Token Refreshing**
+### **Step 1: Implement a Fully Functional Token Refresh Interceptor**
 
-The primary role of our interceptor is no longer to add tokens (the browser does that with cookies), but to gracefully handle `401 Unauthorized` errors when our short-lived access token expires.
+This interceptor provides a seamless user experience by automatically refreshing expired access tokens without interrupting the user.
 
-1.  **Generate the Interceptor:**
-    ```bash
-    ng generate interceptor interceptors/token-refresh
+1.  **Update the `AuthService` with a `refreshToken` method:**
+    ```typescript
+    // src/app/services/auth.service.ts
+    // ...
+    export class AuthService {
+      // ...
+      refreshToken(): Observable<any> {
+        return this.http.post(`${this.apiUrl}/refresh-token`, {});
+      }
+      // ...
+    }
     ```
-
-2.  **Code the `TokenRefreshInterceptor`:**
-    This interceptor tries to refresh the token on a 401 error and then retries the original failed request.
-
+2.  **Code the `TokenRefreshInterceptor` with full RxJS logic:**
     ```typescript
     // src/app/interceptors/token-refresh.interceptor.ts
     import { Injectable } from '@angular/core';
@@ -28,221 +31,162 @@ The primary role of our interceptor is no longer to add tokens (the browser does
 
     @Injectable()
     export class TokenRefreshInterceptor implements HttpInterceptor {
-      // In a real app, you would use your auth service to call the refresh endpoint
-      // For this guide, we'll simulate it.
-      
+      private isRefreshing = false;
+      private refreshTokenSubject: BehaviorSubject<any> = new BehaviorSubject<any>(null);
+
       constructor(private authService: AuthService) {}
 
-      intercept(request: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-        return next.handle(request).pipe(
-          catchError((error: HttpErrorResponse) => {
-            if (error.status === 401) {
-              // Here you would call your authService.refreshToken()
-              // which should return an observable.
-              // If refresh is successful, retry the original request.
-              // If not, log the user out.
-              console.log('Access token expired. A real app would attempt to refresh it here.');
-              this.authService.logout().subscribe();
+      intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+        return next.handle(req).pipe(
+          catchError(error => {
+            if (error instanceof HttpErrorResponse && error.status === 401) {
+              return this.handle401Error(req, next);
             }
             return throwError(() => error);
           })
         );
       }
+
+      private handle401Error(request: HttpRequest<any>, next: HttpHandler) {
+        if (!this.isRefreshing) {
+          this.isRefreshing = true;
+          this.refreshTokenSubject.next(null);
+
+          return this.authService.refreshToken().pipe(
+            switchMap((token: any) => {
+              this.isRefreshing = false;
+              this.refreshTokenSubject.next(token);
+              // The backend automatically sets the new cookie, so we just retry the original request
+              return next.handle(request);
+            }),
+            catchError((err) => {
+              this.isRefreshing = false;
+              this.authService.logout().subscribe();
+              return throwError(() => err);
+            })
+          );
+        } else {
+          return this.refreshTokenSubject.pipe(
+            filter(token => token != null),
+            take(1),
+            switchMap(() => next.handle(request))
+          );
+        }
+      }
     }
     ```
-
-3.  **Provide the Interceptor in `app.module.ts`:**
-    ```typescript
-    // src/app/app.module.ts
-    import { HTTP_INTERCEPTORS } from '@angular/common/http';
-    import { TokenRefreshInterceptor } from './interceptors/token-refresh.interceptor';
-
-    @NgModule({
-      providers: [
-        { provide: HTTP_INTERCEPTORS, useClass: TokenRefreshInterceptor, multi: true },
-      ],
-    })
-    export class AppModule { }
-    ```
+3.  **Provide the interceptor in `app.module.ts`** (if not already done).
 
 ---
 
-### **Step 2: Generate and Build Meme Components**
+### **Step 2: Add "Edit" Functionality and Loading Indicators**
 
-```bash
-# Generate components if you haven't already
-ng generate component components/meme-list
-ng generate component components/meme-form
+We'll refactor the `MemeFormComponent` to handle both creating and editing, and add `isLoading` flags for better UX.
 
-# Generate the service and interface
-ng generate service services/meme
-ng generate interface models/meme
-```
-
----
-
-### **Step 3: Define the Meme Interface and Service**
-
-1.  **Define the `Meme` interface in `src/app/models/meme.ts`:**
-    ```typescript
-    export interface Meme {
-      _id: string;
-      caption: string;
-      imageUrl: string;
-      category: 'Funny' | 'Relatable' | 'Dark' | 'Wholesome';
-      user: {
-        _id: string;
-        username: string;
-      };
-      createdAt?: Date;
-    }
-    ```
-
-2.  **Implement the `MemeService`:**
-    This service handles all API calls for memes. It's clean and doesn't need to know anything about authentication.
+1.  **Update `MemeService` with `getMemeById` and `updateMeme`:**
     ```typescript
     // src/app/services/meme.service.ts
-    import { Injectable } from '@angular/core';
-    import { HttpClient } from '@angular/common/http';
-    import { Observable } from 'rxjs';
-    import { Meme } from '../models/meme';
-    import { environment } from '../../environments/environment';
-
-    @Injectable({ providedIn: 'root' })
+    // ...
     export class MemeService {
-      private apiUrl = `${environment.apiUrl}/memes`;
-
-      constructor(private http: HttpClient) { }
-
-      getMemes(): Observable<Meme[]> {
-        return this.http.get<Meme[]>(this.apiUrl);
+      // ... (getMemes, createMeme, deleteMeme)
+      getMemeById(id: string): Observable<Meme> {
+        return this.http.get<Meme>(`${this.apiUrl}/${id}`);
       }
-
-      createMeme(memeData: { caption: string; imageUrl: string; category: string; }): Observable<Meme> {
-        return this.http.post<Meme>(this.apiUrl, memeData);
-      }
-
-      deleteMeme(id: string): Observable<any> {
-        return this.http.delete(`${this.apiUrl}/${id}`);
+      updateMeme(id: string, memeData: Partial<Meme>): Observable<Meme> {
+        return this.http.put<Meme>(`${this.apiUrl}/${id}`, memeData);
       }
     }
     ```
-
----
-
-### **Step 4: Build the Components with Error Handling**
-
-1.  **Code the `meme-list` Component:**
-    This component now includes an `error` property to provide feedback to the user if memes fail to load.
-    *   **`meme-list.component.ts`**
-        ```typescript
-        import { Component, OnInit } from '@angular/core';
-        import { MemeService } from '../../services/meme.service';
-        import { Meme } from '../../models/meme';
-
-        @Component({
-          selector: 'app-meme-list',
-          templateUrl: './meme-list.component.html',
-        })
-        export class MemeListComponent implements OnInit {
-          memes: Meme[] = [];
-          error: string | null = null;
-
-          constructor(private memeService: MemeService) {}
-
-          ngOnInit(): void {
-            this.loadMemes();
-          }
-
-          loadMemes(): void {
-            this.error = null;
-            this.memeService.getMemes().subscribe({
-              next: (data) => this.memes = data,
-              error: () => this.error = 'Could not load memes. Please try again later.'
-            });
-          }
-
-          handleDelete(memeId: string): void {
-            this.memeService.deleteMeme(memeId).subscribe({
-              next: () => this.loadMemes(), // Reload list on success
-              error: () => this.error = 'Failed to delete meme.'
-            });
-          }
-        }
-        ```
-    *   **`meme-list.component.html`:**
-        ```html
-        <h2>My Memes <a routerLink="/memes/new">+ Add New</a></h2>
-        <div *ngIf="error" class="error-message">{{ error }}</div>
-        <!-- Using app-meme-item component would go here -->
-        <div *ngFor="let meme of memes">
-          <p>{{ meme.caption }} <button (click)="handleDelete(meme._id)">Delete</button></p>
-        </div>
-        ```
-2.  **Code the `meme-form` Component (for creating):**
-    This uses Reactive Forms for better validation and also provides UI error feedback.
+2.  **Refactor `MemeFormComponent` for Create and Edit modes:**
     *   **`meme-form.component.ts`**
         ```typescript
-        import { Component } from '@angular/core';
+        import { Component, OnInit } from '@angular/core';
         import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-        import { Router } from '@angular/router';
+        import { ActivatedRoute, Router } from '@angular/router';
         import { MemeService } from '../../services/meme.service';
+        import { finalize } from 'rxjs/operators';
 
-        @Component({
-          selector: 'app-meme-form',
-          templateUrl: './meme-form.component.html',
-        })
-        export class MemeFormComponent {
+        @Component({ selector: 'app-meme-form', templateUrl: './meme-form.component.html' })
+        export class MemeFormComponent implements OnInit {
           memeForm: FormGroup;
           error: string | null = null;
+          isLoading = false;
+          editMode = false;
+          private memeId: string | null = null;
 
           constructor(
             private fb: FormBuilder,
             private memeService: MemeService,
-            private router: Router
-          ) {
-            this.memeForm = this.fb.group({
-              caption: ['', Validators.required],
-              imageUrl: ['', Validators.required],
-              category: ['Funny', Validators.required],
-            });
+            private router: Router,
+            private route: ActivatedRoute
+          ) { /* ... form initialization ... */ }
+
+          ngOnInit(): void {
+            this.memeId = this.route.snapshot.paramMap.get('id');
+            if (this.memeId) {
+              this.editMode = true;
+              this.isLoading = true;
+              this.memeService.getMemeById(this.memeId).pipe(
+                finalize(() => this.isLoading = false)
+              ).subscribe(meme => {
+                this.memeForm.patchValue(meme);
+              });
+            }
           }
 
           onSubmit(): void {
             if (this.memeForm.invalid) return;
+            this.isLoading = true;
             this.error = null;
-            this.memeService.createMeme(this.memeForm.value).subscribe({
+
+            const operation = this.editMode
+              ? this.memeService.updateMeme(this.memeId!, this.memeForm.value)
+              : this.memeService.createMeme(this.memeForm.value);
+
+            operation.pipe(
+              finalize(() => this.isLoading = false)
+            ).subscribe({
               next: () => this.router.navigate(['/memes']),
-              error: (err) => this.error = err.error.message || 'Failed to create meme.'
+              error: (err) => this.error = err.error.message || 'An error occurred.'
             });
           }
         }
         ```
-    *The HTML for the form would be similar to the login form, with a space to display the `error` message.*
+    *   **`meme-form.component.html`**
+        ```html
+        <h2>{{ editMode ? 'Edit' : 'Create' }} Meme</h2>
+        <div *ngIf="isLoading">Loading...</div>
+        <form *ngIf="!isLoading" [formGroup]="memeForm" (ngSubmit)="onSubmit()">
+          <!-- ... form fields ... -->
+          <div *ngIf="error" class="error-message">{{ error }}</div>
+          <button type="submit" [disabled]="memeForm.invalid || isLoading">
+            {{ editMode ? 'Update' : 'Create' }}
+          </button>
+        </form>
+        ```
+3.  **Update `meme-list.component.html` to include an Edit link:**
+    ```html
+    <!-- Inside the *ngFor loop for memes -->
+    <a [routerLink]="['/memes/edit', meme._id]">Edit</a>
+    ```
 
 ---
 
-### **Step 5: Finalize Application Routing**
+### **Step 3: Finalize Application Routing**
 
-This ties everything together, protecting the meme-related routes with the `AuthGuard`.
+Update the routing module to include the new edit route.
 
 ```typescript
 // src/app/app-routing.module.ts
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { LoginComponent } from './components/login/login.component';
-import { RegisterComponent } from './components/register/register.component';
-import { MemeListComponent } from './components/meme-list/meme-list.component';
-import { MemeFormComponent } from './components/meme-form/meme-form.component';
-import { AuthGuard } from './guards/auth.guard';
-
+// ... imports
 const routes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'register', component: RegisterComponent },
 
-  // Protected Routes that require a user to be logged in
+  // Protected Routes
   { path: 'memes', component: MemeListComponent, canActivate: [AuthGuard] },
   { path: 'memes/new', component: MemeFormComponent, canActivate: [AuthGuard] },
+  { path: 'memes/edit/:id', component: MemeFormComponent, canActivate: [AuthGuard] }, // New Edit Route
 
   // Default and wildcard routes
   { path: '', redirectTo: '/memes', pathMatch: 'full' },
@@ -256,4 +200,4 @@ const routes: Routes = [
 export class AppRoutingModule { }
 ```
 
-**Congratulations!** The development plan is now complete. It outlines a secure, professional, and maintainable approach to building the Meme Collection Manager application, addressing all the critical feedback from the critique.
+This concludes the frontend implementation. You now have a polished and resilient user interface for creating, viewing, and editing memes, complete with automatic session management and user-friendly feedback.
