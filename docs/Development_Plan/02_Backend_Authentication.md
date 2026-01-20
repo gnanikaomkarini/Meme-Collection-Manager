@@ -197,7 +197,12 @@ For `httpOnly` cookies to work correctly with a separate frontend, you must enab
 
     // ... (Central Error Handler - will be added later) ...
     
-    // ... (app.listen) ...
+    const PORT = process.env.PORT || 3000;
+    if (process.env.NODE_ENV !== 'test') {
+      app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    }
+    
+    module.exports = app; // Export for testing
     ```
 
 Your backend is now equipped with a secure, cookie-based authentication system. It no longer sends tokens in the response body, relying instead on `httpOnly` cookies to manage the session, which is a significant security improvement.
