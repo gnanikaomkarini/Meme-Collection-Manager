@@ -1,31 +1,50 @@
-# Development Plan: 03 - Backend CRUD API, Validation, and DRY Principles
+# Development Plan: 03 - Backend CRUD API with Simplified Auth
 
-This guide covers building the API for memes, adding a validation layer, and refactoring to follow the Don't Repeat Yourself (DRY) principle by using shared constants.
-
----
-
-### **Step 1 & 2: Auth Middleware and Meme Model**
-
-(Steps 1 and 2 for creating `auth.middleware.js` and the basic `meme.model.js` remain the same as the previous version of this guide, but we will modify the Meme Model in the next step to use a constant).
+This guide covers building the API for memes, protected by our new, simpler Google OAuth session middleware.
 
 ---
 
-### **Step 3: Create a Single Source of Truth with Constants**
+### **Step 1: Create the Authentication Middleware**
 
-To avoid repeating the list of meme categories in our code (in the model and validator), we will define it once in a constants file. This makes the code more maintainable.
+With Passport.js managing the session, our route protection middleware becomes trivial. It just needs to check for the existence of `req.user`, which Passport automatically populates from the session cookie.
+
+1.  **Create `auth.middleware.js` in `backend/middleware`:**
+    ```javascript
+    // backend/middleware/auth.middleware.js
+    module.exports = {
+      ensureAuth: function (req, res, next) {
+        if (req.isAuthenticated()) { // isAuthenticated() is a Passport.js function
+          return next();
+        } else {
+          res.status(401).json({ message: 'Not Authorized' });
+        }
+      }
+    };
+    ```
+
+---
+
+### **Step 2: Define Constants**
+
+(This step remains unchanged).
 
 1.  **Create `constants.js` in `backend/config`:**
     ```javascript
     // backend/config/constants.js
-    exports.MEME_CATEGORIES = ['Funny', 'Relatable', 'Dark', 'Wholesome'];
+    exports.MEME_CATEGORIES = ['Funny', 'Relatable', 'Dark', 'Wholesome', 'OC'];
     ```
 
-2.  **Update the Meme Model to use the constant:**
-    Now, modify `backend/models/meme.model.js` to import and use this array.
+---
+
+### **Step 3: Create the Meme Model**
+
+(This step remains unchanged).
+
+1.  **Create `meme.model.js` in `backend/models`:**
     ```javascript
     // backend/models/meme.model.js
     const mongoose = require('mongoose');
-    const { MEME_CATEGORIES } = require('../config/constants'); // Import the constant
+    const { MEME_CATEGORIES } = require('../config/constants');
 
     const memeSchema = new mongoose.Schema({
       user: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'User' },
@@ -33,7 +52,7 @@ To avoid repeating the list of meme categories in our code (in the model and val
       imageUrl: { type: String, required: true },
       category: {
         type: String,
-        enum: MEME_CATEGORIES, // Use the constant here
+        enum: MEME_CATEGORIES,
         required: true
       }
     }, { timestamps: true });
@@ -43,41 +62,71 @@ To avoid repeating the list of meme categories in our code (in the model and val
 
 ---
 
-### **Step 4: Create the Input Validation Middleware**
+### **Step 4: Create the Meme Controller and Routes**
 
-This middleware will now also use the shared constant.
+The controller logic remains the same, but the routes will now use our new `ensureAuth` middleware. The `express-validator` middleware is removed for simplicity. Basic validation can be handled inside the controller if needed.
 
-1.  **Create `validation.js` in `backend/middleware`:**
+1.  **Create `meme.controller.js` in `backend/controllers`:** (Code remains the same as previous guides, focusing on mongoose queries).
+
+2.  **Create `meme.routes.js` in `backend/routes`:**
+    This file now applies the `ensureAuth` middleware to all routes.
     ```javascript
-    // backend/middleware/validation.js
-    const { body } = require('express-validator');
-    const { MEME_CATEGORIES } = require('../config/constants'); // Import the constant
+    // backend/routes/meme.routes.js
+    const express = require('express');
+    const router = express.Router();
+    const { getMemes, createMeme, getMemeById, updateMeme, deleteMeme } = require('../controllers/meme.controller');
+    const { ensureAuth } = require('../middleware/auth.middleware');
 
-    exports.validateMeme = [
-      body('caption').not().isEmpty().withMessage('Caption is required.').trim().escape(),
-      body('imageUrl').isURL().withMessage('A valid Image URL is required.'),
-      body('category')
-        .isIn(MEME_CATEGORIES) // Use the constant here
-        .withMessage('Invalid category specified.')
-    ];
+    // Apply the 'ensureAuth' middleware to all routes in this file
+    router.use(ensureAuth);
+
+    router.route('/')
+      .get(getMemes)
+      .post(createMeme);
+
+    router.route('/:id')
+      .get(getMemeById)
+      .put(updateMeme)
+      .delete(deleteMeme);
+
+    module.exports = router;
     ```
 
 ---
 
-### **Step 5: Create the Meme Controller**
+### **Step 5: Implement Centralized Error Handling**
 
-(The `meme.controller.js` code remains the same as the previous version of this guide, with its `validationResult` checks).
+This provides consistent JSON error responses for any errors passed through `next()`.
 
----
+1.  **Create `errorHandler.js` in `backend/middleware`:**
+    ```javascript
+    // backend/middleware/errorHandler.js
+    const errorHandler = (err, req, res, next) => {
+      const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
+      res.status(statusCode);
+      res.json({
+        message: err.message,
+        stack: process.env.NODE_ENV === 'production' ? null : err.stack,
+      });
+    };
+    module.exports = { errorHandler };
+    ```
+2.  **Update `server.js` to use the handler:**
+    The error handler must be the **last piece of middleware**.
+    ```javascript
+    // backend/server.js
+    // ... (imports and other app.use statements)
+    const { errorHandler } = require('./middleware/errorHandler');
 
-### **Step 6: Define and Protect the API Routes**
+    // ... (CORS, passport, sessions, etc.)
 
-(The `meme.routes.js` code remains the same, applying the `protect` and `validateMeme` middleware).
+    app.use('/api/auth', require('./routes/auth.routes'));
+    app.use('/api/memes', require('./routes/meme.routes'));
 
----
+    // Use Central Error Handler
+    app.use(errorHandler);
 
-### **Step 7: Implement Centralized Error Handling**
+    // ... (app.listen) ...
+    ```
 
-(The `errorHandler.js` and the final `server.js` setup remain the same as the previous version of this guide).
-
-By abstracting the categories list into a single constant, the application is now more robust and easier to update. If you need to add a new category, you only have to change it in one place.
+With these changes, the CRUD API is now correctly protected by the Passport.js session, and the code is simplified by the removal of the now-unnecessary validation middleware.

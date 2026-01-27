@@ -1,149 +1,96 @@
-# Development Plan: 02 - Backend Authentication (Secure Cookies)
+# Development Plan: 02 - Backend Authentication (Google OAuth)
 
-This guide covers the implementation of a secure user authentication system for the backend. It uses `httpOnly` cookies to store tokens, which is a critical security measure to protect against XSS attacks.
+This guide details the implementation of a simple and secure authentication system using Passport.js and the Google OAuth 2.0 strategy. This completely replaces the manual, cookie-based JWT system.
 
 ---
 
-### **Step 1: Create the User Model**
+### **Step 1: Create the Google-Ready User Model**
 
-This model defines the `User` schema. The logic for hashing the password before saving remains a best practice and does not need to be changed.
+The User model is simplified, as we no longer store passwords.
 
-1.  **Create `user.model.js` in `backend/models`:**
+1.  **Modify `user.model.js` in `backend/models`:**
 
     ```javascript
     // backend/models/user.model.js
     const mongoose = require('mongoose');
-    const bcrypt = require('bcryptjs');
 
     const userSchema = new mongoose.Schema({
-      username: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true,
-      },
-      password: {
-        type: String,
-        required: true,
-      },
+      googleId: { type: String, required: true, unique: true },
+      displayName: { type: String, required: true },
+      email: { type: String, required: true, unique: true },
+      profileImage: { type: String }
     });
-
-    // Hash password before saving
-    userSchema.pre('save', async function (next) {
-      if (!this.isModified('password')) {
-        return next();
-      }
-      const salt = await bcrypt.genSalt(10);
-      this.password = await bcrypt.hash(this.password, salt);
-      next();
-    });
-
-    // Method to compare entered password with hashed password
-    userSchema.methods.comparePassword = async function (enteredPassword) {
-      return await bcrypt.compare(enteredPassword, this.password);
-    };
 
     module.exports = mongoose.model('User', userSchema);
     ```
 
 ---
 
-### **Step 2: Create the Secure Authentication Controller**
+### **Step 2: Configure the Passport Strategy**
 
-This controller is completely rewritten to handle a secure cookie-based session.
+This is the core of our authentication logic. It tells Passport how to use Google for authentication and how to interact with our user database.
 
-1.  **Create `auth.controller.js` in `backend/controllers`:**
+1.  **Create `passport.js` in `backend/config`:**
 
     ```javascript
-    // backend/controllers/auth.controller.js
+    // backend/config/passport.js
+    const passport = require('passport');
+    const GoogleStrategy = require('passport-google-oauth20').Strategy;
+    const mongoose = require('mongoose');
     const User = require('../models/user.model');
-    const jwt = require('jsonwebtoken');
 
-    // Reusable function to generate and set cookies
-    const generateAndSetTokens = (res, userId) => {
-      const accessToken = jwt.sign({ id: userId }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' });
-      const refreshToken = jwt.sign({ id: userId }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
+    passport.use(new GoogleStrategy({
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: '/api/auth/google/callback', // The full URL will be prefixed by the proxy
+        proxy: true
+      },
+      async (accessToken, refreshToken, profile, done) => {
+        try {
+          // 1. Check if user already exists
+          let user = await User.findOne({ googleId: profile.id });
 
-      // Set cookies on the response
-      res.cookie('accessToken', accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 15 * 60 * 1000 // 15 minutes
-      });
-
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-      });
-    };
-
-    exports.register = async (req, res, next) => {
-      const { username, password } = req.body;
-      try {
-        const user = await User.create({ username, password });
-        generateAndSetTokens(res, user._id);
-        res.status(201).json({ _id: user._id, username: user.username });
-      } catch (error) {
-        next(error); // Pass error to central handler
-      }
-    };
-
-    exports.login = async (req, res, next) => {
-      const { username, password } = req.body;
-      try {
-        const user = await User.findOne({ username });
-        if (user && (await user.comparePassword(password))) {
-          generateAndSetTokens(res, user._id);
-          res.status(200).json({ _id: user._id, username: user.username });
-        } else {
-          res.status(401);
-          throw new Error('Invalid username or password');
+          if (user) {
+            // If they exist, pass them to the next step
+            return done(null, user);
+          } else {
+            // If not, create a new user in our database
+            const newUser = {
+              googleId: profile.id,
+              displayName: profile.displayName,
+              email: profile.emails[0].value,
+              profileImage: profile.photos[0].value
+            };
+            user = await User.create(newUser);
+            return done(null, user);
+          }
+        } catch (err) {
+          return done(err, null);
         }
-      } catch (error) {
-        next(error);
       }
-    };
+    ));
 
-    exports.refreshToken = (req, res, next) => {
-        const token = req.cookies.refreshToken;
-        if (!token) {
-            res.status(401);
-            return next(new Error('Not authenticated, no refresh token'));
-        }
-        jwt.verify(token, process.env.REFRESH_TOKEN_SECRET, (err, decoded) => {
-            if (err) {
-                res.status(403);
-                return next(new Error('Forbidden, invalid refresh token'));
-            }
-            generateAndSetTokens(res, decoded.id);
-            res.status(200).json({ message: 'Tokens refreshed successfully' });
-        });
-    };
+    // Store the user's ID in the session cookie
+    passport.serializeUser((user, done) => {
+      done(null, user.id);
+    });
 
-    exports.logout = (req, res) => {
-      res.cookie('accessToken', '', { httpOnly: true, expires: new Date(0) });
-      res.cookie('refreshToken', '', { httpOnly: true, expires: new Date(0) });
-      res.status(200).json({ message: 'Logged out successfully' });
-    };
-
-    exports.getStatus = async (req, res, next) => {
-      // The 'protect' middleware runs before this, so req.user is available.
+    // Retrieve the user from the session cookie
+    passport.deserializeUser(async (id, done) => {
       try {
-        res.status(200).json(req.user);
-      } catch (error) {
-        next(error);
+        const user = await User.findById(id);
+        done(null, user);
+      } catch (err) {
+        done(err, null);
       }
-    };
+    });
     ```
 
 ---
 
 ### **Step 3: Define the Authentication Routes**
 
-Update the routes to include the new `refreshToken` and `logout` endpoints.
+The routes are now much simpler, delegating all the complex logic to Passport.
 
 1.  **Create `auth.routes.js` in `backend/routes`:**
 
@@ -151,23 +98,42 @@ Update the routes to include the new `refreshToken` and `logout` endpoints.
     // backend/routes/auth.routes.js
     const express = require('express');
     const router = express.Router();
-    const { register, login, refreshToken, logout, getStatus } = require('../controllers/auth.controller');
-    const { protect } = require('../middleware/auth.middleware');
+    const passport = require('passport');
 
-    router.post('/register', register);
-    router.post('/login', login);
-    router.post('/refresh-token', refreshToken);
-    router.post('/logout', logout);
-    router.get('/status', protect, getStatus);
+    // @desc    Auth with Google
+    // @route   GET /api/auth/google
+    router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+    // @desc    Google auth callback
+    // @route   GET /api/auth/google/callback
+    router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/' }),
+      (req, res) => {
+        // Successful authentication, redirect to the frontend app.
+        res.redirect('http://localhost:4200/memes');
+      }
+    );
+
+    // @desc    Get current logged in user
+    // @route   GET /api/auth/current_user
+    router.get('/current_user', (req, res) => {
+      res.send(req.user); // req.user is populated by Passport if a session exists
+    });
+
+    // @desc    Logout user
+    // @route   GET /api/auth/logout
+    router.get('/logout', (req, res) => {
+      req.logout(); // This function is attached by Passport
+      res.redirect('http://localhost:4200/');
+    });
 
     module.exports = router;
     ```
 
 ---
 
-### **Step 4: Update `server.js` to Use Cookies and CORS**
+### **Step 4: Update `server.js` to Initialize Passport**
 
-For `httpOnly` cookies to work correctly with a separate frontend, you must enable `cookieParser` and properly configure CORS (Cross-Origin Resource Sharing).
+Integrate Passport and the session middleware into your Express application.
 
 1.  **Modify `server.js` in the `backend` root:**
 
@@ -176,33 +142,47 @@ For `httpOnly` cookies to work correctly with a separate frontend, you must enab
     require('dotenv').config();
     const express = require('express');
     const cors = require('cors');
-    const cookieParser = require('cookie-parser'); // Import cookie-parser
+    const passport = require('passport');
+    const cookieSession = require('cookie-session');
+
+    // Passport config (ensure this is required so the strategy is registered)
+    require('./config/passport');
 
     const app = express();
 
-    // CORS configuration for credentials
     app.use(cors({
-      credentials: true,
-      origin: 'http://localhost:4200' // Your Angular app's origin
+        credentials: true,
+        origin: 'http://localhost:4200'
     }));
 
-    app.use(cookieParser()); // Use cookie-parser middleware
     app.use(express.json());
+
+    // Session Middleware
+    app.use(
+      cookieSession({
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        keys: [process.env.COOKIE_KEY]
+      })
+    );
+
+    // Passport Middleware
+    app.use(passport.initialize());
+    app.use(passport.session());
 
     // ... (Database connection logic) ...
 
-    // API Routes (will be wired up in the next guides)
+    // API Routes
     app.use('/api/auth', require('./routes/auth.routes'));
     // app.use('/api/memes', require('./routes/meme.routes'));
-
-    // ... (Central Error Handler - will be added later) ...
     
+    // ... (Error Handler) ...
+
     const PORT = process.env.PORT || 3000;
     if (process.env.NODE_ENV !== 'test') {
       app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
     }
     
-    module.exports = app; // Export for testing
+    module.exports = app;
     ```
 
-Your backend is now equipped with a secure, cookie-based authentication system. It no longer sends tokens in the response body, relying instead on `httpOnly` cookies to manage the session, which is a significant security improvement.
+The backend is now fully configured for Google OAuth. The complexity of password hashing, token generation, and refresh logic has been replaced by a standard, secure, and maintainable Passport.js implementation.

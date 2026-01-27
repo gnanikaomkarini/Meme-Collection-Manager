@@ -1,169 +1,160 @@
-# Development Plan: 06 - A Practical Testing Strategy
+# Development Plan: 06 - A Practical Testing Strategy (Google OAuth)
 
-This guide provides a complete, actionable starting point for writing both backend and frontend tests. It moves from placeholder examples to a working, copy-pasteable foundation.
+This guide provides an updated, actionable strategy for testing the application with its new Google OAuth flow.
 
 ---
 
-## 1. Backend Testing: A Complete Example
+## 1. Backend Testing: Mocking the Passport Session
 
-We will set up a professional testing environment for the backend using Jest for running tests, Supertest for making HTTP requests to our API, and `mongodb-memory-server` to run our tests against a clean, in-memory database without affecting our real data.
+Since we no longer have a registration endpoint to test, the main challenge is testing protected API routes that require an authenticated user. The most effective way to do this is to mock the authentication middleware.
 
 1.  **Install Development Dependencies:**
+    (Setup remains the same).
     ```bash
     # From the 'backend' directory
     npm install --save-dev jest supertest mongodb-memory-server
     ```
 
-2.  **Configure Jest:**
-    (The `jest.config.js` file and the `test` script in `package.json` remain the same as in the previous guide).
+2.  **Write a Test for a Protected Endpoint:**
+    This example shows how to test the `GET /api/memes` endpoint. Instead of trying to replicate the Google OAuth flow, we will use Jest to mock the `ensureAuth` middleware.
 
-3.  **Write a Complete, Working API Test:**
-    This example shows how to test the user registration endpoint. It sets up and tears down a test database for each test run.
-
-    *Create `backend/tests/auth.test.js`*
+    *Create `backend/tests/memes.test.js`*
     ```javascript
     const request = require('supertest');
     const mongoose = require('mongoose');
-    const { MongoMemoryServer } = require('mongodb-memory-server');
-    const app = require('../server'); // Assumes server.js conditionally exports 'app'
-    const User = require('../models/user.model');
+    const app = require('../server');
+    const { ensureAuth } = require('../middleware/auth.middleware');
 
-    let mongoServer;
-
-    // Before all tests, create an in-memory MongoDB instance.
-    beforeAll(async () => {
-      mongoServer = await MongoMemoryServer.create();
-      const mongoUri = mongoServer.getUri();
-      await mongoose.connect(mongoUri);
-    });
-
-    // After all tests, disconnect from Mongoose and stop the memory server.
-    afterAll(async () => {
-      await mongoose.disconnect();
-      await mongoServer.stop();
-    });
-
-    // Before each test, clear the User collection.
-    beforeEach(async () => {
-      await User.deleteMany({});
-    });
-
-    describe('POST /api/auth/register', () => {
-      it('should register a new user successfully and return user object', async () => {
-        const newUser = {
-          username: 'testuser',
-          password: 'password123',
+    // Mock the authentication middleware
+    jest.mock('../middleware/auth.middleware', () => ({
+      ensureAuth: (req, res, next) => {
+        // Mock a user object that Passport would normally create
+        req.user = {
+          _id: new mongoose.Types.ObjectId(),
+          googleId: '12345',
+          displayName: 'Test User'
         };
+        next();
+      }
+    }));
+    
+    // In-memory database setup (beforeAll, afterAll) would be the same as previous guides...
 
-        const res = await request(app)
-          .post('/api/auth/register')
-          .send(newUser);
-
-        // Assertions
-        expect(res.statusCode).toEqual(201);
-        expect(res.body).toHaveProperty('_id');
-        expect(res.body.username).toBe('testuser');
-
-        // Verify user was actually saved to the database
-        const savedUser = await User.findOne({ username: 'testuser' });
-        expect(savedUser).not.toBeNull();
-      });
-
-      it('should fail to register a user with a duplicate username', async () => {
-        const newUser = { username: 'testuser', password: 'password123' };
+    describe('GET /api/memes', () => {
+      it('should return a list of memes for the authenticated user', async () => {
+        // Since ensureAuth is mocked, this request will appear to be authenticated
+        const res = await request(app).get('/api/memes');
         
-        // First, create the user
-        await request(app).post('/api/auth/register').send(newUser);
-        
-        // Then, try to create the same user again
-        const res = await request(app).post('/api/auth/register').send(newUser);
-
-        // Assertions for the second attempt
-        expect(res.statusCode).toBe(500); // Or whatever your error handler returns
+        expect(res.statusCode).toEqual(200);
+        // We can't be sure what will be in the body without seeding data,
+        // but we can at least expect it to be an array.
+        expect(Array.isArray(res.body)).toBe(true);
       });
+    });
+
+    describe('POST /api/memes', () => {
+        it('should create a new meme for the authenticated user', async () => {
+            const newMeme = {
+                caption: 'Test Meme',
+                imageUrl: 'http://example.com/meme.jpg',
+                category: 'Funny'
+            };
+
+            const res = await request(app)
+                .post('/api/memes')
+                .send(newMeme);
+
+            expect(res.statusCode).toEqual(201);
+            expect(res.body).toHaveProperty('caption', 'Test Meme');
+            // The mocked req.user._id from the middleware should be assigned to the meme's user field.
+            expect(res.body.user).toBeDefined(); 
+        });
     });
     ```
+    This approach cleanly separates the testing of your application logic from the testing of the authentication flow itself.
 
 ---
 
-## 2. Frontend Testing: A Practical Example
+## 2. Frontend Testing: Testing UI Based on Auth State
 
-(The setup for frontend testing remains the same as in the previous guide. The example below is a slightly more advanced and practical test for the `LoginComponent`).
+Since the login and register components are gone, a practical test case is to verify that our `NavbarComponent` displays the correct information based on whether a user is logged in.
 
-*`src/app/components/login/login.component.spec.ts`*
+*`src/app/components/navbar/navbar.component.spec.ts`*
 ```typescript
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { LoginComponent } from './login.component';
-import { ReactiveFormsModule } from '@angular/forms';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { RouterTestingModule } from '@angular/router/testing';
-import { of, throwError } from 'rxjs';
-import { AuthService } from '../../services/auth.service';
+import { BehaviorSubject } from 'rxjs';
+import { NavbarComponent } from './navbar.component';
+import { AuthService, User } from '../../services/auth.service';
 
-describe('LoginComponent', () => {
-  let component: LoginComponent;
-  let fixture: ComponentFixture<LoginComponent>;
-  let authService: AuthService;
-
-  // Create a mock AuthService
-  const mockAuthService = {
-    login: jest.fn() // Using jest.fn() for spying
-  };
+describe('NavbarComponent', () => {
+  let component: NavbarComponent;
+  let fixture: ComponentFixture<NavbarComponent>;
+  let authServiceMock: any;
+  let userSubject: BehaviorSubject<User | null>;
 
   beforeEach(async () => {
+    // Create a BehaviorSubject to control the mock auth state
+    userSubject = new BehaviorSubject<User | null>(null);
+    
+    authServiceMock = {
+      currentUser$: userSubject.asObservable(),
+      logout: jest.fn()
+    };
+
     await TestBed.configureTestingModule({
-      declarations: [ LoginComponent ],
-      imports: [
-        ReactiveFormsModule,
-        HttpClientTestingModule,
-        RouterTestingModule
-      ],
+      declarations: [ NavbarComponent ],
+      imports: [ RouterTestingModule ],
       providers: [
-        { provide: AuthService, useValue: mockAuthService }
+        { provide: AuthService, useValue: authServiceMock }
       ]
     }).compileComponents();
 
-    fixture = TestBed.createComponent(LoginComponent);
+    fixture = TestBed.createComponent(NavbarComponent);
     component = fixture.componentInstance;
-    authService = TestBed.inject(AuthService);
     fixture.detectChanges();
   });
 
-  it('should not call login service if form is invalid', () => {
-    component.onSubmit();
-    expect(authService.login).not.toHaveBeenCalled();
+  it('should display the "Login with Google" button when logged out', () => {
+    userSubject.next(null); // Simulate logged out state
+    fixture.detectChanges();
+
+    const loginButton = fixture.nativeElement.querySelector('.login-button');
+    const userInfo = fixture.nativeElement.querySelector('.user-info');
+    
+    expect(loginButton).not.toBeNull();
+    expect(userInfo).toBeNull();
+    expect(loginButton.textContent).toContain('Login with Google');
   });
 
-  it('should call login service when form is valid', () => {
-    // Mock a successful login
-    mockAuthService.login.mockReturnValue(of({ _id: '1', username: 'test' }));
+  it('should display user information and logout button when logged in', () => {
+    const mockUser: User = {
+      _id: '1',
+      googleId: '123',
+      displayName: 'Test User',
+      email: 'test@example.com',
+      profileImage: 'http://example.com/img.png'
+    };
+    userSubject.next(mockUser); // Simulate logged in state
+    fixture.detectChanges();
+
+    const loginButton = fixture.nativeElement.querySelector('.login-button');
+    const userInfo = fixture.nativeElement.querySelector('.user-info');
     
-    component.loginForm.controls.username.setValue('testuser');
-    component.loginForm.controls.password.setValue('password123');
-    
-    component.onSubmit();
-    
-    expect(authService.login).toHaveBeenCalledWith({
-      username: 'testuser',
-      password: 'password123'
-    });
+    expect(loginButton).toBeNull();
+    expect(userInfo).not.toBeNull();
+    expect(userInfo.textContent).toContain('Welcome, Test User');
   });
 
-  it('should display an error message on failed login', () => {
-    // Mock a failed login
-    const errorResponse = { error: { message: 'Invalid credentials' } };
-    mockAuthService.login.mockReturnValue(throwError(() => errorResponse));
+  it('should call authService.logout when logout button is clicked', () => {
+    userSubject.next({ _id: '1', googleId: '123', displayName: 'Test', email: 'a@b.com', profileImage: '' });
+    fixture.detectChanges();
 
-    component.loginForm.controls.username.setValue('testuser');
-    component.loginForm.controls.password.setValue('password123');
-    
-    component.onSubmit();
-    fixture.detectChanges(); // Update the view with the error
+    const logoutButton = fixture.nativeElement.querySelector('button');
+    logoutButton.click();
 
-    const errorEl = fixture.nativeElement.querySelector('.error-message');
-    expect(errorEl.textContent).toContain('Invalid credentials');
-    expect(component.error).toBe('Invalid credentials');
+    expect(authServiceMock.logout).toHaveBeenCalled();
   });
 });
 ```
-This completes the testing strategy, providing a fully working foundation for ensuring the application is correct, secure, and maintainable.
+This testing strategy is adapted to the new OAuth flow, ensuring our application logic and UI state management are still robust and verifiable.

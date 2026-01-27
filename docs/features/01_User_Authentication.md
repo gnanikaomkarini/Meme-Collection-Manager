@@ -1,39 +1,51 @@
-# Feature: 01 - User Authentication
+# Feature: 01 - User Authentication via Google OAuth
 
-This document describes the user authentication feature, which is the foundation of the application, ensuring that users have a personal and secure space for their meme collection.
+This document describes the user authentication feature, which is the foundation of the application. To ensure a secure, reliable, and user-friendly experience, we will delegate authentication to Google using the OAuth 2.0 standard, managed by the Passport.js library. This approach eliminates the need to handle passwords, implement complex session management, or build email verification flows.
 
 ---
 
 ### **1. Core Functionality**
 
-The authentication system is built around two primary actions: **Registration** and **Login**.
+The authentication system is built around three primary actions:
 
-*   **Registration:** A new user can create an account using a unique username and a password that meets defined complexity requirements.
-*   **Login:** An existing user can sign in to access their meme collection.
+*   **Login:** An unauthenticated user can initiate a login, which will redirect them to Google to authorize the application.
+*   **Logout:** An authenticated user can securely terminate their session.
+*   **Session Persistence:** A user's login state is maintained across page reloads and browser sessions.
 
-### **2. Technical Implementation (High-Level)**
+### **2. User Model**
+
+The `User` model will be simplified, as we no longer store sensitive password information.
+
+*   The `User` model in MongoDB will store:
+    *   `googleId` (string, unique): The unique identifier provided by Google.
+    *   `displayName` (string): The user's full name from their Google profile.
+    *   `email` (string, unique): The user's primary Google email address.
+    *   `profileImage` (string): A URL to the user's Google profile picture.
+
+### **3. Technical Implementation (High-Level)**
 
 *   **Backend:**
-    *   A `User` model stores the `username` and a hashed `password` in the MongoDB database. Passwords are never stored in plain text.
-    *   When a user logs in successfully, the backend generates a **JSON Web Token (JWT)** and sets it in a secure, `httpOnly` cookie. This makes the token inaccessible to client-side JavaScript, mitigating XSS risks.
+    *   The backend will use **Passport.js** with the `passport-google-oauth20` strategy.
+    *   Session management will be handled using `cookie-session`. When a user successfully authenticates via Google, Passport will create a session and store the user's ID in an encrypted, `httpOnly` cookie.
+    *   On subsequent requests, the cookie is sent automatically, and Passport decodes it to restore the user's session and make the user object available on `req.user`.
 
 *   **Frontend:**
-    *   Simple forms are provided for registration and login.
-    *   The browser will automatically include the JWT cookie on all subsequent requests to the backend. The frontend logic does not need to manage the token manually.
+    *   The UI will not contain any login or registration forms.
+    *   A simple "Login with Google" button will link directly to the backend's Google authentication endpoint (e.g., `/api/auth/google`).
 
-### **3. User Flow**
+### **4. User Flow (OAuth Dance)**
 
-1.  A new user visits the application and is presented with a login page.
-2.  They click a "Register" link, which takes them to the registration form.
-3.  After submitting their new username and a sufficiently strong password, they are **automatically logged in** and redirected to their meme gallery.
-4.  Upon successful login, they are granted access to their meme gallery and can begin managing their collection. The application will show a "Logout" button, and protected links like "My Memes" will become visible.
+1.  A new user visits the application and sees a "Login with Google" button.
+2.  The user clicks the button, which navigates them to the backend endpoint `/api/auth/google`.
+3.  The backend redirects the user to Google's consent screen, requesting permission to access their basic profile information.
+4.  The user agrees and is redirected back to a callback endpoint on our backend (e.g., `/api/auth/google/callback`).
+5.  The backend, using Passport.js, exchanges a one-time code from Google for the user's profile information.
+6.  The backend looks up the user by their `googleId`. If they exist, they are logged in. If they don't exist, a new user is created in the database.
+7.  A session is established via an encrypted cookie, and the user is redirected back to the main frontend application (e.g., `/memes`).
+8.  The user is now logged in and can access all protected features.
 
-### **4. Security and Scalability**
+### **5. Security**
 
-These measures are non-negotiable requirements for the authentication system.
-
-*   **Secure Token Storage:** The JWT will be stored in an `httpOnly` cookie to prevent it from being accessed by client-side scripts, thus protecting against XSS-based token theft.
-*   **Token Expiration:** JWTs will be configured with a short expiration time (e.g., 15 minutes) to limit the window of opportunity for replay attacks. A refresh token mechanism will be used to maintain a persistent session without compromising security.
-*   **Password Strength:** The backend will enforce password complexity rules during registration (e.g., minimum length, use of numbers and special characters).
-*   **Rate Limiting:** The login and password reset endpoints will be protected by rate-limiting to defend against brute-force attacks.
-*   **Password Reset:** A secure "Forgot Password" mechanism will be implemented. This is a critical feature, not an optional enhancement. It will involve sending a time-sensitive, single-use link to the user's registered email address.
+*   **No Password Storage:** By delegating to Google, we completely avoid the risks associated with storing passwords and implementing our own authentication logic.
+*   **CSRF Protection:** Standard practices for CSRF protection should be implemented in the backend framework.
+*   **Secure Cookies:** All session cookies will be `httpOnly` and, in production, will be marked as `secure`.

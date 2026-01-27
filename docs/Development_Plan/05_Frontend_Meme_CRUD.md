@@ -1,16 +1,16 @@
 # Development Plan: 05 - Frontend CRUD, Polish, and Finalization
 
-This guide elevates the frontend to a polished application by implementing a token refresh mechanism, loading indicators, the "Edit" feature, and proper component architecture.
+This guide elevates the frontend to a polished application by implementing loading indicators, the "Edit" feature, and proper component architecture. With Google OAuth, we no longer need to manage tokens on the client, which simplifies the process.
 
 ---
 
-### **Step 1: Implement the Token Refresh Interceptor**
+### **A Note on Session Management**
 
-(This step, including the `AuthService` update and the `TokenRefreshInterceptor` code, remains the same as the previous version of this guide. It is a critical piece for seamless session management).
+Previously, this guide included a step for a "Token Refresh Interceptor." This is **no longer needed**. Session management is now handled automatically via the secure, `httpOnly` session cookie that the browser sends with every API request. There are no client-side tokens to refresh.
 
 ---
 
-### **Step 2: Create the `MemeItem` Child Component**
+### **Step 1: Create the `MemeItem` Child Component**
 
 To create a clean and reusable architecture, we'll create a dedicated component to display a single meme.
 
@@ -19,7 +19,7 @@ To create a clean and reusable architecture, we'll create a dedicated component 
     ng generate component components/meme-item
     ```
 2.  **Code the `meme-item.component.ts`:**
-    This "presentational" component takes a `meme` as input and emits an event when the delete button is clicked. It doesn't know *how* to delete a meme, it just reports the user's intent to its parent.
+    This "presentational" component takes a `meme` as input and emits events when the user wants to edit or delete it.
     ```typescript
     import { Component, Input, Output, EventEmitter } from '@angular/core';
     import { Meme } from '../../models/meme'; // Assuming you have a meme model
@@ -57,16 +57,16 @@ To create a clean and reusable architecture, we'll create a dedicated component 
 
 ---
 
-### **Step 3: Update the `MemeListComponent` to Act as a Parent**
+### **Step 2: Update the `MemeListComponent` to Act as a Parent**
 
-The `meme-list` component is now a "container" component. Its job is to fetch data and coordinate child components.
+The `meme-list` component is now a "container" component. Its job is to fetch data and coordinate the child components.
 
 1.  **Update `meme-list.component.html` to use the new child component:**
     The logic is much cleaner. It loops over `app-meme-item` and listens for the `delete` event.
     ```html
     <h2>My Memes <a routerLink="/memes/new">+ Add New</a></h2>
     <div *ngIf="isLoading">Loading memes...</div>
-    <div *ngIf="error" class.="error-message">{{ error }}</div>
+    <div *ngIf="error" class="error-message">{{ error }}</div>
     <div *ngIf="!isLoading && !error" class="meme-gallery">
       <app-meme-item
         *ngFor="let meme of memes"
@@ -121,12 +121,134 @@ The `meme-list` component is now a "container" component. Its job is to fetch da
 
 ---
 
-### **Step 4: Implement the "Edit" Feature**
+### **Step 3: Implement the "Edit" Feature**
 
-(This step, which includes refactoring the `MemeFormComponent` and `MemeService`, remains the same as the previous version of this guide).
+We'll refactor the `MemeFormComponent` to handle both creating and editing, and add `isLoading` flags for better UX.
 
-### **Step 5: Finalize Application Routing**
+1.  **Update `MemeService` with `getMemeById` and `updateMeme`:**
+    ```typescript
+    // src/app/services/meme.service.ts
+    import { Meme } from '../models/meme';
+    import { Observable } from 'rxjs';
+    // ...
+    export class MemeService {
+      // ... (getMemes, createMeme, deleteMeme)
+      getMemeById(id: string): Observable<Meme> {
+        return this.http.get<Meme>(`${this.apiUrl}/${id}`);
+      }
+      updateMeme(id: string, memeData: Partial<Meme>): Observable<Meme> {
+        return this.http.put<Meme>(`${this.apiUrl}/${id}`, memeData);
+      }
+    }
+    ```
+2.  **Refactor `MemeFormComponent` for Create and Edit modes:**
+    *   **`meme-form.component.ts`**
+        ```typescript
+        import { Component, OnInit } from '@angular/core';
+        import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+        import { ActivatedRoute, Router } from '@angular/router';
+        import { MemeService } from '../../services/meme.service';
+        import { finalize } from 'rxjs/operators';
 
-(This step, showing the final `app-routing.module.ts` with the edit route, also remains the same).
+        @Component({ selector: 'app-meme-form', templateUrl: './meme-form.component.html' })
+        export class MemeFormComponent implements OnInit {
+          memeForm: FormGroup;
+          error: string | null = null;
+          isLoading = false;
+          editMode = false;
+          private memeId: string | null = null;
 
-This completes the frontend architecture, creating a more maintainable and scalable structure by properly separating container and presentational components.
+          constructor(
+            private fb: FormBuilder,
+            private memeService: MemeService,
+            private router: Router,
+            private route: ActivatedRoute
+          ) { 
+            this.memeForm = this.fb.group({
+              caption: ['', Validators.required],
+              imageUrl: ['', Validators.required],
+              category: ['', Validators.required]
+            });
+          }
+
+          ngOnInit(): void {
+            this.memeId = this.route.snapshot.paramMap.get('id');
+            if (this.memeId) {
+              this.editMode = true;
+              this.isLoading = true;
+              this.memeService.getMemeById(this.memeId).pipe(
+                finalize(() => this.isLoading = false)
+              ).subscribe(meme => {
+                this.memeForm.patchValue(meme);
+              });
+            }
+          }
+
+          onSubmit(): void {
+            if (this.memeForm.invalid) return;
+            this.isLoading = true;
+            this.error = null;
+
+            const operation = this.editMode
+              ? this.memeService.updateMeme(this.memeId!, this.memeForm.value)
+              : this.memeService.createMeme(this.memeForm.value);
+
+            operation.pipe(
+              finalize(() => this.isLoading = false)
+            ).subscribe({
+              next: () => this.router.navigate(['/memes']),
+              error: (err) => this.error = err.error.message || 'An error occurred.'
+            });
+          }
+        }
+        ```
+    *   **`meme-form.component.html`**
+        ```html
+        <h2>{{ editMode ? 'Edit' : 'Create' }} Meme</h2>
+        <div *ngIf="isLoading">Loading...</div>
+        <form *ngIf="!isLoading" [formGroup]="memeForm" (ngSubmit)="onSubmit()">
+          <!-- Fields for caption, imageUrl, category -->
+          <div *ngIf="error" class="error-message">{{ error }}</div>
+          <button type="submit" [disabled]="memeForm.invalid || isLoading">
+            {{ editMode ? 'Update' : 'Create' }}
+          </button>
+        </form>
+        ```
+3.  **Update `meme-list.component.html` to include an Edit link:**
+    The `meme-item.component.html` already contains the `[routerLink]`, so this part is covered by Step 1.
+
+
+### **Step 4: Finalize Application Routing**
+
+Update the routing module to include the protected routes for creating and editing memes, guarded by the `AuthGuard`.
+
+```typescript
+// src/app/app-routing.module.ts
+import { NgModule } from '@angular/core';
+import { RouterModule, Routes } from '@angular/router';
+import { HomeComponent } from './components/home/home.component';
+import { MemeListComponent } from './components/meme-list/meme-list.component';
+import { MemeFormComponent } from './components/meme-form/meme-form.component';
+import { AuthGuard } from './guards/auth.guard';
+
+const routes: Routes = [
+  // Public route
+  { path: '', component: HomeComponent },
+
+  // Protected Routes
+  { path: 'memes', component: MemeListComponent, canActivate: [AuthGuard] },
+  { path: 'memes/new', component: MemeFormComponent, canActivate: [AuthGuard] },
+  { path: 'memes/edit/:id', component: MemeFormComponent, canActivate: [AuthGuard] },
+
+  // Wildcard route
+  { path: '**', redirectTo: '/memes' }
+];
+
+@NgModule({
+  imports: [RouterModule.forRoot(routes)],
+  exports: [RouterModule]
+})
+export class AppRoutingModule { }
+```
+
+This completes the frontend architecture, creating a more maintainable and scalable structure by properly separating container and presentational components. The removal of manual token management greatly simplifies the overall state logic.
