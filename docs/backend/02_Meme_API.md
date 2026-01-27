@@ -66,6 +66,16 @@ All endpoints are prefixed with `/api/memes`.
 
 ### 1. `POST /`
 *   **Purpose:** To create a new meme.
+*   **Request:**
+    *   Method: `POST`
+    *   Body:
+        ```json
+        {
+          "caption": "A witty caption for the meme",
+          "imageUrl": "https://example.com/image.png",
+          "category": "Funny"
+        }
+        ```
 *   **Responses:**
     *   **`201 Created`:** On successful creation.
         ```json
@@ -74,20 +84,19 @@ All endpoints are prefixed with `/api/memes`.
           "data": { /* full meme document */ }
         }
         ```
-    *   **`400 Bad Request`:** For invalid input. The error message will be specific.
-        ```json
-        {
-          "status": {
-            "success": false,
-            "error": { "code": "INVALID_INPUT", "message": "A valid imageUrl is required." }
-          },
-          "data": null
-        }
-        ```
+    *   **`400 Bad Request`:** For invalid input.
     *   **`401 Unauthorized`:** See Common Error Responses.
 
 ### 2. `GET /`
 *   **Purpose:** To retrieve a paginated list of the user's memes.
+*   **Request:**
+    *   Method: `GET`
+    *   Body: None.
+    *   **Query Parameters (Optional):**
+        *   `page` (number): The page number to retrieve.
+        *   `limit` (number): The number of items per page.
+        *   `category` (string): Filters memes by a specific category.
+        *   `search` (string): Performs a text search on the `caption` field.
 *   **Responses:**
     *   **`200 OK`:** On success.
         ```json
@@ -103,6 +112,9 @@ All endpoints are prefixed with `/api/memes`.
 
 ### 3. `GET /:id`
 *   **Purpose:** To retrieve a single meme by its ID.
+*   **Request:**
+    *   Method: `GET`
+    *   Body: None.
 *   **Responses:**
     *   **`200 OK`:** On success.
         ```json
@@ -116,6 +128,15 @@ All endpoints are prefixed with `/api/memes`.
 
 ### 4. `PUT /:id`
 *   **Purpose:** To update a meme's details.
+*   **Request:**
+    *   Method: `PUT`
+    *   Body:
+        ```json
+        {
+          "caption": "A new, even wittier caption",
+          "category": "OC"
+        }
+        ```
 *   **Responses:**
     *   **`200 OK`:** On successful update.
         ```json
@@ -130,6 +151,9 @@ All endpoints are prefixed with `/api/memes`.
 
 ### 5. `DELETE /:id`
 *   **Purpose:** To permanently delete a meme.
+*   **Request:**
+    *   Method: `DELETE`
+    *   Body: None.
 *   **Responses:**
     *   **`200 OK`:** On successful deletion.
         ```json
@@ -146,15 +170,9 @@ All endpoints are prefixed with `/api/memes`.
 ## Bonus Feature API
 
 ### 6. `POST /:id/toggle-like`
-
-
-
 *   **Purpose:** To add or remove a user's "like" from a meme.
-
 *   **Request:**
-
     *   Method: `POST`
-
     *   Body: None.
 *   **Responses:**
     *   **`200 OK`:** On success.
@@ -172,6 +190,9 @@ All endpoints are prefixed with `/api/memes`.
 
 ### 7. `GET /random`
 *   **Purpose:** To retrieve a single random meme from the user's collection.
+*   **Request:**
+    *   Method: `GET`
+    *   Body: None.
 *   **Responses:**
     *   **`200 OK`:** On success.
         ```json
@@ -181,13 +202,4 @@ All endpoints are prefixed with `/api/memes`.
         }
         ```
     *   **`401 Unauthorized`:** See Common Error Responses.
-    *   **`404 Not Found`:** If the user has no memes in their collection. The error message will be specific.
-        ```json
-        {
-          "status": {
-            "success": false,
-            "error": { "code": "NO_MEMES_FOUND", "message": "No memes found in your collection to select a random one." }
-          },
-          "data": null
-        }
-        ```
+    *   **`404 Not Found`:** If the user has no memes.
