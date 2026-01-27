@@ -59,29 +59,34 @@ Sensitive information and environment-specific settings are stored in a `.env` f
     *   `.env.example`: A template file that will be committed to Git to show other developers what variables are needed.
 
     ```bash
-touch .env .env.example
-```
+    touch .env .env.example
+    ```
 
 2.  **Add content to `.env.example` (The Template):**
     ```ini
-PORT=3000
-MONGO_URI=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-COOKIE_KEY=
-```
+    PORT=3000
+    MONGO_URI=
+    GOOGLE_CLIENT_ID=
+    GOOGLE_CLIENT_SECRET=
+    COOKIE_KEY=
+    BACKEND_URL=http://localhost:3000
+    FRONTEND_URL=http://localhost:4200
+    ```
 
 3.  **Add content to `.env` (Your Local Secrets):**
-    Copy the content from the `.env.example` file and fill in your actual secret values. You will need to get your Google Client ID and Secret from the Google Cloud Console.
+    Copy the content from the `.env.example` file and fill in your actual secret values.
 
     ```ini
-PORT=3000
-MONGO_URI=mongodb://localhost:27017/memesDB
-GOOGLE_CLIENT_ID=your-google-client-id-from-google-cloud
-GOOGLE_CLIENT_SECRET=your-google-client-secret-from-google-cloud
-COOKIE_KEY=a-long-random-string-for-cookie-encryption
-```
-
+    PORT=3000
+    MONGO_URI=mongodb://localhost:27017/memesDB
+    GOOGLE_CLIENT_ID=your-google-client-id-from-google-cloud
+    GOOGLE_CLIENT_SECRET=your-google-client-secret-from-google-cloud
+    COOKIE_KEY=a-long-random-string-for-cookie-encryption
+    BACKEND_URL=http://localhost:3000
+    FRONTEND_URL=http://localhost:4200
+    ```
+    *   **`BACKEND_URL`**: The public base URL of your backend. This is useful for constructing absolute URLs for callbacks, like with Google OAuth.
+    *   **`FRONTEND_URL`**: The URL of your frontend application. This is essential for configuring CORS correctly and for redirecting users back to the frontend after login or logout.
 ### **Step 5: Create Backend Folder Structure**
 
 A well-organized folder structure is key for a maintainable project.
