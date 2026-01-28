@@ -45,13 +45,8 @@ We will use Angular Material to quickly build a clean, modern user interface.
 Just as with the backend, we need to tell the frontend where to find the backend API.
 
 1.  Open `frontend/src/environments/environment.ts`.
-2.  Replace its content with the following to define your backend URL.
-    ```typescript
-    export const environment = {
-      production: false,
-      backendUrl: 'http://localhost:3000'
-    };
-    ```
+2.  Inside the `environment` object, add a new property named `backendUrl`.
+3.  Set the value of this property to your backend's address as a string (e.g., `'http://localhost:3000'`).
 
 ### **Step 4: Create the Core Authentication Service**
 
@@ -61,153 +56,34 @@ This service will be the central point for handling all authentication logic, su
     ```bash
     ng generate service services/auth
     ```
-2.  Open the new file `frontend/src/app/services/auth.service.ts` and replace its content with the following:
-    ```typescript
-    import { Injectable } from '@angular/core';
-    import { HttpClient } from '@angular/common/http';
-    import { BehaviorSubject, Observable } from 'rxjs';
-    import { tap, catchError } from 'rxjs/operators';
-    import { of } from 'rxjs';
-    import { environment } from '../../environments/environment';
-
-    // Define the structure of the User object
-    export interface User {
-      _id: string;
-      googleId: string;
-      displayName: string;
-      email: string;
-      profileImage: string;
-    }
-    
-    // Define the structure of the API response envelope
-    export interface ApiResponse<T> {
-        status: { success: boolean, error: any };
-        data: T | null;
-    }
-
-    @Injectable({
-      providedIn: 'root'
-    })
-    export class AuthService {
-      // A BehaviorSubject holds the current user value. null means the user is logged out.
-      private userSubject = new BehaviorSubject<User | null>(null);
-      // Expose the user state as a public observable for components to subscribe to.
-      public user$ = this.userSubject.asObservable();
-
-      constructor(private http: HttpClient) {
-        // When the service is first created, immediately check the user's auth status.
-        this.checkAuthStatus().subscribe();
-      }
-
-      // Check the backend's /current_user endpoint
-      checkAuthStatus(): Observable<ApiResponse<User>> {
-        return this.http.get<ApiResponse<User>>(`${environment.backendUrl}/auth/current_user`, { withCredentials: true }).pipe(
-          tap(response => {
-            if (response.status.success && response.data) {
-              this.userSubject.next(response.data); // Update user state on success
-            } else {
-              this.userSubject.next(null); // Ensure user is null on failure
-            }
-          }),
-          catchError(() => {
-            this.userSubject.next(null); // On HTTP error, set user to null
-            return of(); // Return an empty observable to complete the stream
-          })
-        );
-      }
-
-      // To log in, we redirect the entire window to the backend's Google auth route
-      login(): void {
-        window.location.href = `${environment.backendUrl}/auth/google`;
-      }
-
-      // To log out, we redirect to the backend's logout route
-      logout(): void {
-        window.location.href = `${environment.backendUrl}/auth/logout`;
-      }
-    }
-    ```
+2.  Open the new file `frontend/src/app/services/auth.service.ts` and implement the following logic:
+    *   **Imports**: Import `Injectable` from `@angular/core`, `HttpClient` from `@angular/common/http`, `BehaviorSubject`, `Observable`, and `of` from `rxjs`, `tap` and `catchError` from `rxjs/operators`, and your `environment` file.
+    *   **Interfaces**: Define two exported interfaces, `User` and `ApiResponse<T>`, to provide strong typing for the data you expect from your backend. The `User` interface should match your backend's user model, and `ApiResponse` should match the success/error envelope.
+    *   **State Management**: Inside the `AuthService` class, create a private `BehaviorSubject` named `userSubject` to hold the current user state. Initialize it with `null` to represent a logged-out state. Then, create a public observable property named `user$` and assign it the value of `this.userSubject.asObservable()`.
+    *   **Constructor**: Inject `HttpClient` into the service's constructor. From within the constructor, call a method (which you will create next) to check the user's authentication status as soon as the application loads.
+    *   **`checkAuthStatus()` Method**: Create this public method. It should make an HTTP `GET` request to your backend's `/auth/current_user` endpoint. **Crucially**, include the `{ withCredentials: true }` option in the request to ensure the session cookie is sent. Use RxJS's `.pipe()` method to handle the response.
+        *   In the `tap` operator, check if the API response was successful and contains user data in its `data` property. If so, call `this.userSubject.next()` with the user data. Otherwise, call it with `null`.
+        *   In the `catchError` operator, call `this.userSubject.next(null)` to handle cases where the HTTP request itself fails (e.g., the backend is down). Return an empty observable with `of()` to allow the application to continue.
+    *   **`login()` Method**: Create a public `login()` method. Its only job is to change the browser's location to your backend's Google authentication URL (e.g., `window.location.href = 'http://localhost:3000/auth/google'`).
+    *   **`logout()` Method**: Create a public `logout()` method that does the same as `login()`, but for your backend's `/auth/logout` URL.
 
 ### **Step 5: Set Up a Basic App Layout and UI**
 
 Now, let's create a simple toolbar that shows the user's status and login/logout buttons.
 
-1.  **Import Modules**: Open `frontend/src/app/app.module.ts` and add `HttpClientModule` (for making API requests) and the necessary Material modules.
-    ```typescript
-    // Other imports...
-    import { HttpClientModule } from '@angular/common/http';
-    import { MatToolbarModule } from '@angular/material/toolbar';
-    import { MatButtonModule } from '@angular/material/button';
-    import { MatIconModule } from '@angular/material/icon';
-
-    @NgModule({
-      declarations: [ /* ... */ ],
-      imports: [
-        // ... Other modules
-        HttpClientModule,
-        MatToolbarModule,
-        MatButtonModule,
-        MatIconModule
-      ],
-      providers: [],
-      bootstrap: [AppComponent]
-    })
-    export class AppModule { }
-    ```
-
-2.  **Update the Main Component Logic**: Open `frontend/src/app/app.component.ts` and connect it to the `AuthService`.
-    ```typescript
-    import { Component } from '@angular/core';
-    import { AuthService, User } from './services/auth.service';
-    import { Observable } from 'rxjs';
-
-    @Component({
-      selector: 'app-root',
-      templateUrl: './app.component.html',
-      styleUrls: ['./app.component.scss']
-    })
-    export class AppComponent {
-      user$: Observable<User | null>;
-
-      constructor(private authService: AuthService) {
-        this.user$ = this.authService.user$;
-      }
-
-      login(): void {
-        this.authService.login();
-      }
-
-      logout(): void {
-        this.authService.logout();
-      }
-    }
-    ```
-3.  **Update the Main Component HTML**: Open `frontend/src/app/app.component.html` and replace its content with this layout.
-    ```html
-    <mat-toolbar color="primary">
-      <span>Meme Collection Manager</span>
-      <span class="spacer"></span>
-      
-      <!-- Show Login button if user is logged out -->
-      <ng-container *ngIf="(user$ | async) === null">
-        <button mat-flat-button (click)="login()">
-          <mat-icon>login</mat-icon>
-          Login with Google
-        </button>
-      </ng-container>
-
-      <!-- Show user name and Logout button if user is logged in -->
-      <ng-container *ngIf="user$ | async as user">
-        <span>Hello, {{ user.displayName }}</span>
-        <button mat-icon-button (click)="logout()" aria-label="Logout button">
-          <mat-icon>logout</mat-icon>
-        </button>
-      </ng-container>
-    </mat-toolbar>
-
-    <!-- This is where your page content will be rendered -->
-    <router-outlet></router-outlet>
-    ```
+1.  **Import Modules**: Open `frontend/src/app/app.module.ts`. Find the `imports` array within the `@NgModule` decorator. Add `HttpClientModule` (for using the `HttpClient` you injected in your service) and the necessary Angular Material modules: `MatToolbarModule`, `MatButtonModule`, and `MatIconModule`.
+2.  **Update the Main Component Logic**: Open `frontend/src/app/app.component.ts`.
+    *   Inject your `AuthService` into the constructor.
+    *   Create a public property named `user$` that is an `Observable<User | null>`.
+    *   In the constructor, assign the `user$` observable from your `AuthService` to this component's `user$` property.
+    *   Create public `login()` and `logout()` methods in the component that simply call the corresponding methods on your injected `authService` instance.
+3.  **Update the Main Component HTML**: Open `frontend/src/app/app.component.html` and create the layout.
+    *   Add a `<mat-toolbar>` element with `color="primary"`.
+    *   Inside the toolbar, add a `<span>` for your app title and a spacer element (`<span class="spacer"></span>`).
+    *   Use an `<ng-container>` with an `*ngIf` structural directive to check the `user$` observable (with an `async` pipe). If the user is `null`, display a "Login with Google" `<button>`.
+    *   Use a second `<ng-container>` with `*ngIf` to check if `user$` has a value. If it does, display a welcome message like `<span>Hello, {{ user.displayName }}</span>` and a "Logout" button.
+    *   Bind the `(click)` events of your login and logout buttons to the `login()` and `logout()` methods you created in the component's class.
+    *   Finally, ensure you have a `<router-outlet>` tag after the toolbar to render your page content.
 
 ### **Step 6: Run and Test the Frontend**
 
