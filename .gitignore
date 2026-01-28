@@ -1,21 +1,15 @@
-# Angular specific
-/dist/
-/out-tsc/
-/tmp/
-/coverage/
-/e2e/test-output/
-/.angular/
-.angular/
-
-# Dependency files
-/yarn.lock
-
-# Angular CLI and build artefacts
-/.angular-cli.json
-/.ng/
-
-# TypeScript cache
-*.tsbuildinfo
+# Frontend specific (Angular Project)
+/frontend/meme-app/dist/
+/frontend/meme-app/out-tsc/
+/frontend/meme-app/tmp/
+/frontend/meme-app/coverage/
+/frontend/meme-app/node_modules/
+/frontend/meme-app/.angular/
+/frontend/meme-app/.env
+/frontend/meme-app/e2e/test-output/
+/frontend/meme-app/.angular-cli.json
+/frontend/meme-app/.ng/
+/frontend/meme-app/*.tsbuildinfo
 
 # Logs
 npm-debug.log*
