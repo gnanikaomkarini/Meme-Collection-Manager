@@ -13,17 +13,61 @@ This guide walks you through writing the code for the backend authentication sys
 
 ### **Step 1: Create the User Model**
 
+This is the first and crucial step for setting up authentication. This model defines how user data obtained from Google will be stored in your MongoDB database. It's essential that the field names and validation rules match the expectations of your Passport.js strategy and ensure data integrity.
+
 *   **File to Create**: `backend/models/user.model.js`
 *   **What to Implement**:
     1.  **Import Mongoose**: Start by requiring the `mongoose` library.
-    2.  **Define Schema**: Create a new `mongoose.Schema`. This object will define the structure and rules for documents in your `users` collection.
-    3.  **Add Fields**:
-        *   `googleId`: This should be a `String`, `required`, and `unique`. It's the most important field for identifying users, as it comes directly from Google. Add `index: true` to ensure the database can find users by their `googleId` very quickly during login.
-        *   `displayName`: A `String` that is `required`. It's good practice to add `trim: true` to automatically remove any accidental leading or trailing whitespace.
-        *   `email`: A `String` that is `required` and `unique`. Add `trim: true` and `lowercase: true` to ensure emails like `" user@example.com "` and `"USER@EXAMPLE.COM"` are stored consistently as `"user@example.com"`, which is crucial for enforcing the `unique` constraint correctly.
-        *   `profileImage`: A simple `String`. This is not required, as a user might not have a profile picture.
-    4.  **Enable Timestamps**: In the second argument to `new mongoose.Schema()`, pass an options object `{ timestamps: true }`. This tells Mongoose to automatically manage `createdAt` and `updatedAt` fields for you.
-    5.  **Export Model**: Finally, export the model using `module.exports = mongoose.model('User', userSchema)`.
+    2.  **Define Schema**: Create a new `mongoose.Schema()`. This will be the blueprint for your user documents.
+    3.  **Add Fields**: Define the following fields within your schema definition object:
+        *   `googleId`: This *must* be `googleId` (not `id`) to match the `profile.id` provided by Google. It should be a `String`, `required: true`, `unique: true`, and `index: true` for efficient lookups during authentication.
+        *   `displayName`: This *must* be `displayName` (not `Name`) to match `profile.displayName`. It should be a `String`, `required: true`, and include `trim: true` to remove extraneous whitespace.
+        *   `email`: This should be a `String`, `required: true`, and `unique: true`. Crucially, include `lowercase: true` and `trim: true` to ensure email addresses are stored consistently (e.g., `User@Example.com` becomes `user@example.com`), which is vital for correct uniqueness validation.
+        *   `profileImage`: This *must* be `profileImage` (not `profilePicture`) to match `profile.photos[0].value`. It should be a `String` and is not `required`.
+    4.  **Enable Timestamps (Correctly)**: After the schema definition object, pass a *second argument* to `new mongoose.Schema()`. This second argument is an options object, where you should set `{ timestamps: true }`. This tells Mongoose to automatically add `createdAt` and `updatedAt` fields to your documents.
+    5.  **Export Model**: Finally, export the Mongoose model using `module.exports = mongoose.model('User', userSchema)`.
+
+**Example `backend/models/user.model.js` (Corrected):**
+
+```javascript
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+  // The unique ID provided by Google for the user. Matches profile.id.
+  googleId: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true // Indexed for fast lookups.
+  },
+
+  // The user's full display name from their Google account. Matches profile.displayName.
+  displayName: {
+    type: String,
+    required: true,
+    trim: true
+  },
+
+  // The user's primary email address from their Google account. Matches profile.emails[0].value.
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true, // Store emails in a consistent format.
+    trim: true
+  },
+
+  // The URL for the user's profile picture. Matches profile.photos[0].value.
+  profileImage: {
+    type: String
+  }
+}, {
+  // Correct placement for schema options, enables createdAt and updatedAt.
+  timestamps: true
+});
+
+module.exports = mongoose.model('User', userSchema);
+```
 
 ---
 
