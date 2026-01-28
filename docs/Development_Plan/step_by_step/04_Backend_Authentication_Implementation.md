@@ -80,7 +80,7 @@ module.exports = mongoose.model('User', userSchema);
         *   **Configuration Object**: This object tells the strategy your app's credentials. It needs:
             *   `clientID`: Get this from your environment variables: `process.env.GOOGLE_CLIENT_ID`.
             *   `clientSecret`: Likewise, get `process.env.GOOGLE_CLIENT_SECRET`.
-            *   `callbackURL`: This is the exact URL on your backend that Google will redirect to after the user authenticates. To make it dynamic, build it from your environment variables: `${process.env.BACKEND_URL}/api/auth/google/callback`.
+            *   `callbackURL`: This is the exact URL on your backend that Google will redirect to after the user authenticates. To make it dynamic, build it from your environment variables: `${process.env.BACKEND_URL}/auth/google/callback`.
             *   `proxy: true`: This option is important if your backend runs behind a proxy (like Nginx or a cloud load balancer), telling Passport to trust the `callbackURL` from the proxy.
         *   **Verification Callback**: This is an `async` function that Passport will execute after it successfully gets the user's profile from Google. It receives `(accessToken, refreshToken, profile, done)` as arguments. Inside this function, you must:
             *   Wrap your logic in a `try...catch` block.
@@ -124,7 +124,7 @@ module.exports = mongoose.model('User', userSchema);
         *   `app.use(cookieSession({ ... }))`: Configure the session middleware. It needs `maxAge` (the duration of the cookie in milliseconds, e.g., 30 days) and `keys` (an array containing your `COOKIE_KEY` from `.env` to encrypt the session cookie).
         *   `app.use(passport.initialize())`: Initializes Passport itself.
         *   `app.use(passport.session())`: This middleware enables persistent login sessions by managing the serialization and deserialization of user information.
-    6.  **Mount Routes**: Use `app.use('/api/auth', require('./routes/auth.routes'))` to tell your Express app to use the authentication router for all requests starting with `/api/auth`.
+    6.  **Mount Routes**: Use `app.use('/auth', require('./routes/auth.routes'))` to tell your Express app to use the authentication router for all requests starting with `/auth`.
     7.  **Error Handling**: Include a basic error handling middleware (`app.use((err, req, res, next) => { ... })`) as the last `app.use` statement.
     8.  **Start Server**: Use `app.listen()` with your `PORT` from `.env` to start the server, but only if `process.env.NODE_ENV` is not `'test'`. Export the `app` for testing purposes.
 
