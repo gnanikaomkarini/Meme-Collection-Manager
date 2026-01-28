@@ -56,7 +56,7 @@ This service will be the central point for handling all authentication logic, su
     ```bash
     ng generate service services/auth
     ```
-2.  Open the new file `frontend/src/app/services/auth.service.ts` and implement the following logic:
+2.  Open the new file `frontend/src/app/services/auth.ts` and implement the following logic:
     *   **Imports**: Import `Injectable` from `@angular/core`, `HttpClient` from `@angular/common/http`, `BehaviorSubject`, `Observable`, and `of` from `rxjs`, `tap` and `catchError` from `rxjs/operators`, and your `environment` file.
     *   **Interfaces**: Define two exported interfaces, `User` and `ApiResponse<T>`, to provide strong typing for the data you expect from your backend. The `User` interface should match your backend's user model, and `ApiResponse` should match the success/error envelope.
     *   **State Management**: Inside the `AuthService` class, create a private `BehaviorSubject` named `userSubject` to hold the current user state. Initialize it with `null` to represent a logged-out state. Then, create a public observable property named `user$` and assign it the value of `this.userSubject.asObservable()`.
