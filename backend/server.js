@@ -4,12 +4,13 @@ const passport = require('passport');
 require('./config/passport');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const cookieSession = require('cookie-session');
+const session = require('express-session');
 const authRoutes = require('./routes/auth.routes');
 
 async function connectDB() {
     try {
-        await mongoose.connect(process.env.MONGO_URI + '/' + process.env.DATABASE_NAME , {
+        await mongoose.connect(process.env.MONGO_URI, {
+            dbName: process.env.DATABASE_NAME
         });
         console.log('MongoDB connected');
     } catch (err) {
@@ -31,9 +32,13 @@ app.use(cors(
         credentials: true
     }
 ));
-app.use(cookieSession({
-    maxAge: 24 * 60 * 60 * 1000,
-    keys: [process.env.COOKIE_KEY]
+app.use(session({
+    secret: process.env.COOKIE_KEY,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
