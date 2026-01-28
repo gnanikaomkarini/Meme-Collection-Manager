@@ -47,7 +47,7 @@ app.use('/auth', authRoutes);
 
 app.use((err, req, res, next) => {
     console.error(err.stack);
-    res.status(500).send('Something broke!');
+    res.status(500).json({ status: { success: false, error: { code: "INTERNAL_SERVER_ERROR", message: err.message || "Something broke!" } }, data: null });
 });
 
 app.listen(process.env.PORT || 3000, () => {

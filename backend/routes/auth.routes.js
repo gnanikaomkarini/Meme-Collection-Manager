@@ -18,9 +18,9 @@ router.get('/google/callback', passport.authenticate('google', {
 //GET /current_user
 router.get('/current_user', (req, res) => {
     if (req.isAuthenticated()) {
-        res.json(req.user);
+        res.json({ status: { success: true, error: null }, data: req.user });
     } else {
-        res.status(401).json({ message: 'Unauthorized' });
+        res.status(401).json({ status: { success: false, error: { code: "UNAUTHORIZED", message: "User is not authenticated." } }, data: null });
     }
 });
 
