@@ -6,6 +6,7 @@
 /frontend/node_modules/
 /frontend/.angular/
 /frontend/.env
+/frontend/.vscode/
 /frontend/e2e/test-output/
 /frontend/.angular-cli.json
 
