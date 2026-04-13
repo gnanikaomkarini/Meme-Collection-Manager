@@ -86,50 +86,55 @@ import { MemeService } from '../../services/meme';
                 </mat-error>
               </mat-form-field>
 
-              <!-- Image Upload Field -->
+              <!-- Image Upload/Preview Section -->
               <div class="image-upload-section">
-                <label for="imageInput" class="upload-label">
-                  <div class="upload-box">
-                    <mat-icon>image</mat-icon>
-                    <p>Click to upload meme image</p>
-                    <span class="file-info">JPG, PNG, GIF, WebP up to 5MB</span>
-                  </div>
-                </label>
-                <input
-                  #fileInput
-                  type="file"
-                  id="imageInput"
-                  hidden
-                  accept="image/*"
-                  (change)="onFileSelected($event)"
-                  [disabled]="isUploading()"
-                />
+                <!-- Upload Box (shown when no image selected) -->
+                <ng-container *ngIf="!form.get('imageUrl')?.value || isUploading()">
+                  <label for="imageInput" class="upload-label">
+                    <div class="upload-box">
+                      <mat-icon>image</mat-icon>
+                      <p>Click to upload meme image</p>
+                      <span class="file-info">Any image format up to 5MB</span>
+                    </div>
+                  </label>
+                  <input
+                    #fileInput
+                    type="file"
+                    id="imageInput"
+                    hidden
+                    accept="image/*"
+                    (change)="onFileSelected($event)"
+                    [disabled]="isUploading()"
+                  />
+                </ng-container>
+
+                <!-- Upload Progress -->
+                <div *ngIf="isUploading()" class="upload-progress">
+                  <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+                  <p>Uploading image...</p>
+                </div>
+
+                <!-- Image Preview (shown when image selected and not uploading) -->
+                <div *ngIf="form.get('imageUrl')?.value && !isUploading()" class="image-preview">
+                  <img
+                    [src]="form.get('imageUrl')?.value"
+                    alt="Preview"
+                    (error)="onImageError()"
+                  />
+                  <button
+                    type="button"
+                    mat-icon-button
+                    (click)="clearImage()"
+                    class="clear-button"
+                  >
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </div>
+
+                <!-- Upload Error -->
                 <mat-error *ngIf="uploadError()">
                   {{ uploadError() }}
                 </mat-error>
-              </div>
-
-              <!-- Upload Progress -->
-              <div *ngIf="isUploading()" class="upload-progress">
-                <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-                <p>Uploading image...</p>
-              </div>
-
-              <!-- Image Preview -->
-              <div *ngIf="form.get('imageUrl')?.value && !isUploading()" class="image-preview">
-                <img
-                  [src]="form.get('imageUrl')?.value"
-                  alt="Preview"
-                  (error)="onImageError()"
-                />
-                <button
-                  type="button"
-                  mat-icon-button
-                  (click)="clearImage()"
-                  class="clear-button"
-                >
-                  <mat-icon>close</mat-icon>
-                </button>
               </div>
 
               <!-- Category Select -->
@@ -403,15 +408,15 @@ export class CreateMemeComponent implements OnInit {
 
     if (!file) return;
 
-    // Validate file
+    // Validate file size
     if (file.size > 5 * 1024 * 1024) {
       this.uploadError.set('File is too large. Maximum size is 5MB.');
       return;
     }
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      this.uploadError.set('Invalid file type. Only JPG, PNG, GIF, and WebP are allowed.');
+    // Accept any image type
+    if (!file.type.startsWith('image/')) {
+      this.uploadError.set('Please select a valid image file.');
       return;
     }
 
