@@ -5,6 +5,7 @@ require('./config/passport');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const session = require('express-session');
+const { MongoStore } = require('connect-mongo');
 const path = require('path');
 const authRoutes = require('./routes/auth.routes');
 const memeRoutes = require('./routes/meme.routes');
@@ -39,6 +40,11 @@ app.use(session({
     secret: process.env.COOKIE_KEY,
     resave: false,
     saveUninitialized: false,
+    store: new MongoStore({ 
+        mongoUrl: process.env.MONGO_URI,
+        dbName: process.env.DATABASE_NAME,
+        touchAfter: 24 * 3600 // lazy session update every 24 hours
+    }),
     cookie: {
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         secure: process.env.NODE_ENV === 'production', // only send over HTTPS in production
