@@ -58,6 +58,11 @@ app.use(passport.session());
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Root route
+app.get('/', (req, res) => {
+    res.json({ message: 'Meme Collection Manager backend is running' });
+});
+
 app.use('/auth', authRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/memes', memeRoutes);
