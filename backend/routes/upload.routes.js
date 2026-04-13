@@ -22,8 +22,8 @@ router.post('/', isAuthenticated, upload.single('image'), (req, res) => {
             });
         }
 
-        // Return the image URL relative to the server
-        const imageUrl = `/uploads/${req.file.filename}`;
+        // Return the full image URL so it works from the frontend
+        const imageUrl = `${process.env.BACKEND_URL}/uploads/${req.file.filename}`;
         
         res.status(201).json({
             imageUrl: imageUrl,
