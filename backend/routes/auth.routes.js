@@ -12,7 +12,8 @@ router.get('/google' , passport.authenticate('google', {
 router.get('/google/callback', passport.authenticate('google', {
     failureRedirect: process.env.FRONTEND_URL + '/login'
 }), (req, res) => {
-    res.redirect(process.env.FRONTEND_URL + '/');
+    // Redirect to frontend callback route which will verify auth was successful
+    res.redirect(process.env.FRONTEND_URL + '/auth/callback');
 });
 
 //GET /current_user
