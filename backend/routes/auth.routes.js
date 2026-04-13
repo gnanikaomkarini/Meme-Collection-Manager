@@ -16,11 +16,13 @@ router.get('/google/callback', passport.authenticate('google', {
 });
 
 //GET /current_user
+// Returns 200 with user object if authenticated, 401 if not
+// Fixed: Removed verbose response envelope, returns proper HTTP semantics
 router.get('/current_user', (req, res) => {
     if (req.isAuthenticated()) {
-        res.json({ status: { success: true, error: null }, data: req.user });
+        res.json(req.user);
     } else {
-        res.status(401).json({ status: { success: false, error: { code: "UNAUTHORIZED", message: "User is not authenticated." } }, data: null });
+        res.status(401).json({ code: "UNAUTHORIZED", message: "User is not authenticated." });
     }
 });
 
@@ -30,7 +32,9 @@ router.get('/logout', (req, res, next) => {
         if (err) {
             return next(err);
         }
-        res.redirect(process.env.FRONTEND_URL + '/login');
+        // Fixed: Return 200 with no content instead of redirecting
+        // Frontend will handle navigation
+        res.status(200).json({ message: "Logged out successfully" });
     });
 });
 
