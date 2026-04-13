@@ -22,6 +22,11 @@ export const routes: Routes = [
     canActivate: [authGuard]
   },
   {
+    path: 'edit/:id',
+    component: CreateMemeComponent,
+    canActivate: [authGuard]
+  },
+  {
     path: 'meme/:id',
     component: MemeDetailComponent,
     canActivate: [authGuard]
