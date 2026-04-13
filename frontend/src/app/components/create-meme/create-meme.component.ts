@@ -10,6 +10,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MemeService } from '../../services/meme';
 
@@ -28,6 +29,7 @@ import { MemeService } from '../../services/meme';
     MatToolbarModule,
     MatIconModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     RouterLink,
   ],
   template: `
@@ -84,30 +86,50 @@ import { MemeService } from '../../services/meme';
                 </mat-error>
               </mat-form-field>
 
-              <!-- Image URL Field -->
-              <mat-form-field class="full-width">
-                <mat-label>Image URL</mat-label>
+              <!-- Image Upload Field -->
+              <div class="image-upload-section">
+                <label for="imageInput" class="upload-label">
+                  <div class="upload-box">
+                    <mat-icon>image</mat-icon>
+                    <p>Click to upload meme image</p>
+                    <span class="file-info">JPG, PNG, GIF, WebP up to 5MB</span>
+                  </div>
+                </label>
                 <input
-                  matInput
-                  formControlName="imageUrl"
-                  placeholder="https://example.com/meme.jpg"
-                  required
+                  #fileInput
+                  type="file"
+                  id="imageInput"
+                  hidden
+                  accept="image/*"
+                  (change)="onFileSelected($event)"
+                  [disabled]="isUploading()"
                 />
-                <mat-error *ngIf="form.get('imageUrl')?.hasError('required')">
-                  Image URL is required
+                <mat-error *ngIf="uploadError()">
+                  {{ uploadError() }}
                 </mat-error>
-                <mat-error *ngIf="form.get('imageUrl')?.hasError('pattern')">
-                  Please enter a valid URL
-                </mat-error>
-              </mat-form-field>
+              </div>
+
+              <!-- Upload Progress -->
+              <div *ngIf="isUploading()" class="upload-progress">
+                <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+                <p>Uploading image...</p>
+              </div>
 
               <!-- Image Preview -->
-              <div *ngIf="form.get('imageUrl')?.value" class="image-preview">
+              <div *ngIf="form.get('imageUrl')?.value && !isUploading()" class="image-preview">
                 <img
                   [src]="form.get('imageUrl')?.value"
                   alt="Preview"
                   (error)="onImageError()"
                 />
+                <button
+                  type="button"
+                  mat-icon-button
+                  (click)="clearImage()"
+                  class="clear-button"
+                >
+                  <mat-icon>close</mat-icon>
+                </button>
               </div>
 
               <!-- Category Select -->
@@ -142,7 +164,7 @@ import { MemeService } from '../../services/meme';
                   mat-raised-button
                   type="submit"
                   color="primary"
-                  [disabled]="!form.valid || isSubmitting()"
+                  [disabled]="!form.valid || isSubmitting() || isUploading()"
                 >
                   <mat-icon *ngIf="!isSubmitting()">check</mat-icon>
                   <mat-spinner
@@ -208,7 +230,61 @@ import { MemeService } from '../../services/meme';
       width: 100%;
     }
 
+    .image-upload-section {
+      margin: 16px 0;
+    }
+
+    .upload-label {
+      cursor: pointer;
+      display: block;
+    }
+
+    .upload-box {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 32px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+
+    .upload-box:hover {
+      border-color: #3f51b5;
+      background: #f8f9ff;
+    }
+
+    .upload-box mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #999;
+      margin: 0 auto;
+    }
+
+    .upload-box p {
+      margin: 12px 0 4px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .file-info {
+      display: block;
+      font-size: 12px;
+      color: #999;
+    }
+
+    .upload-progress {
+      text-align: center;
+      margin: 16px 0;
+    }
+
+    .upload-progress p {
+      margin-top: 8px;
+      font-size: 14px;
+      color: #666;
+    }
+
     .image-preview {
+      position: relative;
       width: 100%;
       max-height: 300px;
       overflow: hidden;
@@ -220,6 +296,18 @@ import { MemeService } from '../../services/meme';
       width: 100%;
       height: 100%;
       object-fit: cover;
+    }
+
+    .clear-button {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+    }
+
+    .clear-button:hover {
+      background: rgba(0, 0, 0, 0.7);
     }
 
     .checkbox-group {
@@ -248,12 +336,18 @@ import { MemeService } from '../../services/meme';
       display: inline-block;
       margin-right: 8px;
     }
+
+    mat-error {
+      font-size: 12px;
+    }
   `]
 })
 export class CreateMemeComponent implements OnInit {
   form!: FormGroup;
   memeId: string | null = null;
   isSubmitting = signal(false);
+  isUploading = signal(false);
+  uploadError = signal<string | null>(null);
 
   constructor(
     private fb: FormBuilder,
@@ -277,15 +371,7 @@ export class CreateMemeComponent implements OnInit {
     this.form = this.fb.group({
       title: ['', [Validators.required, Validators.minLength(3)]],
       caption: ['', [Validators.required, Validators.minLength(5)]],
-      imageUrl: [
-        '',
-        [
-          Validators.required,
-          Validators.pattern(
-            /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i
-          ),
-        ],
-      ],
+      imageUrl: ['', [Validators.required]],
       category: ['funny'],
       isPublic: [true],
     });
@@ -309,6 +395,45 @@ export class CreateMemeComponent implements OnInit {
         this.router.navigate(['/']);
       },
     });
+  }
+
+  onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) return;
+
+    // Validate file
+    if (file.size > 5 * 1024 * 1024) {
+      this.uploadError.set('File is too large. Maximum size is 5MB.');
+      return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      this.uploadError.set('Invalid file type. Only JPG, PNG, GIF, and WebP are allowed.');
+      return;
+    }
+
+    this.uploadError.set(null);
+    this.isUploading.set(true);
+
+    this.memeService.uploadImage(file).subscribe({
+      next: (response) => {
+        this.form.get('imageUrl')?.setValue(response.imageUrl);
+        this.isUploading.set(false);
+      },
+      error: (error) => {
+        console.error('Upload error:', error);
+        this.uploadError.set(error.error?.message || 'Failed to upload image');
+        this.isUploading.set(false);
+      }
+    });
+  }
+
+  clearImage() {
+    this.form.get('imageUrl')?.setValue('');
+    this.uploadError.set(null);
   }
 
   submitForm() {

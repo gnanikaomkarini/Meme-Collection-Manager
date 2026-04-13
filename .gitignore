@@ -21,4 +21,5 @@ yarn-error.log*
 # Backend specific
 /backend/node_modules/
 /backend/.env
-/.geminiignore
+/.geminiignoreuploads
+

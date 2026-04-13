@@ -25,13 +25,32 @@ export interface MemeListResponse {
   };
 }
 
+export interface UploadResponse {
+  imageUrl: string;
+  filename: string;
+  size: number;
+}
+
 @Injectable({
   providedIn: 'root',
 })
 export class MemeService {
   private apiUrl = 'http://localhost:3000/api/memes';
+  private uploadUrl = 'http://localhost:3000/api/upload';
 
   constructor(private http: HttpClient) {}
+
+  /**
+   * Upload image file
+   */
+  uploadImage(file: File) {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    return this.http.post<UploadResponse>(`${this.uploadUrl}`, formData, {
+      withCredentials: true
+    });
+  }
 
   /**
    * Get paginated list of public memes

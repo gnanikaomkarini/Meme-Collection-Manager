@@ -5,8 +5,10 @@ require('./config/passport');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const session = require('express-session');
+const path = require('path');
 const authRoutes = require('./routes/auth.routes');
 const memeRoutes = require('./routes/meme.routes');
+const uploadRoutes = require('./routes/upload.routes');
 
 async function connectDB() {
     try {
@@ -47,7 +49,11 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use('/auth', authRoutes);
+app.use('/api/upload', uploadRoutes);
 app.use('/api/memes', memeRoutes);
 
 app.use((err, req, res, next) => {
