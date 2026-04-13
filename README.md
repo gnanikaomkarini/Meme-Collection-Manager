@@ -13,6 +13,8 @@ All features implemented and tested successfully!
 - ✅ MongoDB integration with Mongoose
 - ✅ RESTful API with proper HTTP semantics
 - ✅ Meme CRUD operations (Create, Read, Update, Delete)
+- ✅ **Image file upload** with multer (5MB max, JPEG/PNG/GIF/WebP)
+- ✅ Static file serving for uploaded images
 - ✅ Like/unlike functionality
 - ✅ Comments system
 - ✅ Pagination support
@@ -22,7 +24,9 @@ All features implemented and tested successfully!
 - ✅ Google OAuth login page
 - ✅ Dashboard with meme grid gallery
 - ✅ Meme detail view with full information
-- ✅ Create/Edit meme form with image preview
+- ✅ **Create/Edit meme form with drag-drop file upload**
+- ✅ **Image file upload with progress indicator**
+- ✅ **Real-time image preview**
 - ✅ Like functionality with real-time updates
 - ✅ Comments section with full CRUD
 - ✅ Authentication guards protecting routes
@@ -186,6 +190,13 @@ meme-collection-manager/
 - `DELETE /api/memes/:id/like` - Unlike meme (authenticated)
 - `POST /api/memes/:id/comments` - Add comment (authenticated)
 - `DELETE /api/memes/:id/comments/:commentId` - Delete comment (author or owner)
+
+### Image Upload
+- `POST /api/upload` - Upload image file (authenticated)
+  - Request: `multipart/form-data` with `image` field
+  - Response: `{ imageUrl, filename, size }`
+  - Limits: 5MB max, JPEG/PNG/GIF/WebP only
+  - Files served from `/uploads/` directory
 
 ### Response Format
 All responses follow REST principles:
