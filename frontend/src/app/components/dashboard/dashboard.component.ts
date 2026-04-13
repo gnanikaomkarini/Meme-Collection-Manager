@@ -4,10 +4,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCardModule } from '@angular/material/card';
 import { MatGridListModule } from '@angular/material/grid-list';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService, User } from '../../services/auth';
 import { MemeService, Meme } from '../../services/meme';
 
@@ -16,10 +17,12 @@ import { MemeService, Meme } from '../../services/meme';
   standalone: true,
   imports: [
     CommonModule,
+    RouterLink,
     MatButtonModule,
     MatToolbarModule,
     MatIconModule,
     MatMenuModule,
+    MatDividerModule,
     MatProgressSpinnerModule,
     MatCardModule,
     MatGridListModule,
@@ -264,7 +267,6 @@ import { MemeService, Meme } from '../../services/meme';
   `]
 })
 export class DashboardComponent implements OnInit {
-  currentUser = this.authService.currentUser;
   isLoading = signal(true);
   memes = signal<Meme[]>([]);
 
@@ -273,6 +275,10 @@ export class DashboardComponent implements OnInit {
     private memeService: MemeService,
     private router: Router
   ) {}
+
+  get currentUser() {
+    return this.authService.currentUser;
+  }
 
   ngOnInit() {
     this.loadMemes();
