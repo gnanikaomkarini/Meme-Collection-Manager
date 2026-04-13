@@ -22,12 +22,9 @@ export class AuthCallbackComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    console.log('AuthCallback component initialized');
-    
     // The backend has set the session cookie, now we need to verify it
     // Add a delay to ensure the cookie is set before checking
     setTimeout(() => {
-      console.log('Checking auth status...');
       this.authService.checkAuthStatus();
       
       // Wait for the auth check to complete
@@ -36,16 +33,13 @@ export class AuthCallbackComponent implements OnInit {
       
       const checkInterval = setInterval(() => {
         attempts++;
-        console.log('Checking if loading is complete...', this.authService.isLoading(), attempts);
         
         if (!this.authService.isLoading() || attempts >= maxAttempts) {
           clearInterval(checkInterval);
           
           if (this.authService.isAuthenticated()) {
-            console.log('Authentication successful, redirecting to dashboard');
             this.router.navigate(['/']);
           } else {
-            console.log('Authentication failed, redirecting to login');
             this.router.navigate(['/login']);
           }
         }
