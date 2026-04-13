@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const session = require('express-session');
 const authRoutes = require('./routes/auth.routes');
+const memeRoutes = require('./routes/meme.routes');
 
 async function connectDB() {
     try {
@@ -44,10 +45,11 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use('/auth', authRoutes);
+app.use('/api/memes', memeRoutes);
 
 app.use((err, req, res, next) => {
     console.error(err.stack);
-    res.status(500).json({ status: { success: false, error: { code: "INTERNAL_SERVER_ERROR", message: err.message || "Something broke!" } }, data: null });
+    res.status(500).json({ code: "INTERNAL_SERVER_ERROR", message: err.message || "Something went wrong" });
 });
 
 app.listen(process.env.PORT || 3000, () => {
