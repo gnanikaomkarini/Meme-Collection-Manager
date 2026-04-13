@@ -1,13 +1,19 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth';
+import { CommonModule } from '@angular/common';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 @Component({
   selector: 'app-auth-callback',
   standalone: true,
-  template: `<div style="display: flex; align-items: center; justify-content: center; height: 100vh;">
-    <p>Completing login...</p>
-  </div>`,
+  imports: [CommonModule, MatProgressSpinnerModule],
+  template: `
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px;">
+      <mat-spinner diameter="50"></mat-spinner>
+      <p>Completing login...</p>
+    </div>
+  `,
 })
 export class AuthCallbackComponent implements OnInit {
   constructor(
@@ -16,21 +22,35 @@ export class AuthCallbackComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    // Wait a moment for the cookie to be set, then check auth status
+    console.log('AuthCallback component initialized');
+    
+    // The backend has set the session cookie, now we need to verify it
+    // Add a delay to ensure the cookie is set before checking
     setTimeout(() => {
+      console.log('Checking auth status...');
       this.authService.checkAuthStatus();
       
-      // Wait for auth check to complete
+      // Wait for the auth check to complete
+      const maxAttempts = 50; // 5 seconds max (50 * 100ms)
+      let attempts = 0;
+      
       const checkInterval = setInterval(() => {
-        if (!this.authService.isLoading()) {
+        attempts++;
+        console.log('Checking if loading is complete...', this.authService.isLoading(), attempts);
+        
+        if (!this.authService.isLoading() || attempts >= maxAttempts) {
           clearInterval(checkInterval);
+          
           if (this.authService.isAuthenticated()) {
+            console.log('Authentication successful, redirecting to dashboard');
             this.router.navigate(['/']);
           } else {
+            console.log('Authentication failed, redirecting to login');
             this.router.navigate(['/login']);
           }
         }
       }, 100);
-    }, 500);
+    }, 1000); // Wait 1 second for cookie to be set
   }
 }
+
