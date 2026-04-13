@@ -291,22 +291,25 @@ import { MemeService } from '../../services/meme';
     .image-preview {
       position: relative;
       width: 100%;
-      max-height: 400px;
+      max-height: 500px;
       display: flex;
       align-items: center;
       justify-content: center;
       background: #f9f9f9;
       border-radius: 8px;
       margin-top: 12px;
-      overflow: hidden;
+      padding: 16px;
+      box-sizing: border-box;
+      overflow: auto;
     }
 
     .image-preview img {
-      max-width: 100%;
-      max-height: 100%;
+      max-width: calc(100% - 32px);
+      max-height: calc(100% - 32px);
       width: auto;
       height: auto;
       object-fit: contain;
+      display: block;
     }
 
     .clear-button {
