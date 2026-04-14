@@ -187,7 +187,8 @@ import { MemeService, Meme } from '../../services/meme';
     img[mat-card-image] {
       width: 100%;
       height: 300px;
-      object-fit: cover;
+      object-fit: contain;
+      background: #f0f0f0;
     }
 
     mat-card-header {

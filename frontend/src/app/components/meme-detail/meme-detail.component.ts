@@ -257,7 +257,8 @@ import { AuthService } from '../../services/auth';
     .meme-image {
       width: 100%;
       max-height: 600px;
-      object-fit: cover;
+      object-fit: contain;
+      background: #f0f0f0;
       border-radius: 8px;
       margin-bottom: 24px;
     }
